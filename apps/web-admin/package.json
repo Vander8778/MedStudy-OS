@@ -1,0 +1,24 @@
+{
+  "name": "@medstudy/web-admin",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --ext .js,.ts,.tsx",
+    "test": "vitest run --passWithNoTests --config vitest.config.ts",
+    "clean": "rimraf .next"
+  },
+  "dependencies": {
+    "@medstudy/contracts": "workspace:*",
+    "@medstudy/ui-kit": "workspace:*",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  }
+}

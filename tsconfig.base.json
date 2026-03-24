@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@medstudy/contracts": ["./packages/contracts/src"],
+      "@medstudy/contracts/*": ["./packages/contracts/src/*"],
+      "@medstudy/domain": ["./packages/domain/src"],
+      "@medstudy/domain/*": ["./packages/domain/src/*"],
+      "@medstudy/ai-schemas": ["./packages/ai-schemas/src"],
+      "@medstudy/ai-schemas/*": ["./packages/ai-schemas/src/*"],
+      "@medstudy/ui-kit": ["./packages/ui-kit/src"],
+      "@medstudy/ui-kit/*": ["./packages/ui-kit/src/*"]
+    }
+  }
+}

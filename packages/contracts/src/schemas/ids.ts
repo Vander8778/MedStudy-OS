@@ -1,0 +1,38 @@
+import { z } from "zod";
+import { nonEmptyStringSchema } from "./common";
+
+export const artifactIdSchema = nonEmptyStringSchema;
+export const avatarIdSchema = nonEmptyStringSchema;
+export const avatarUnlockIdSchema = nonEmptyStringSchema;
+export const checkpointIdSchema = nonEmptyStringSchema;
+export const contractIdSchema = nonEmptyStringSchema;
+export const evaluationIdSchema = nonEmptyStringSchema;
+export const masteryTrackIdSchema = nonEmptyStringSchema;
+export const notificationIdSchema = nonEmptyStringSchema;
+export const penaltyIdSchema = nonEmptyStringSchema;
+export const profileIdSchema = nonEmptyStringSchema;
+export const promptTemplateIdSchema = nonEmptyStringSchema;
+export const sessionBlockIdSchema = nonEmptyStringSchema;
+export const sessionEventIdSchema = nonEmptyStringSchema;
+export const sessionIdSchema = nonEmptyStringSchema;
+export const telemetryEventIdSchema = nonEmptyStringSchema;
+export const userIdSchema = nonEmptyStringSchema;
+export const vivaAttemptIdSchema = nonEmptyStringSchema;
+
+export type ArtifactId = z.infer<typeof artifactIdSchema>;
+export type AvatarId = z.infer<typeof avatarIdSchema>;
+export type AvatarUnlockId = z.infer<typeof avatarUnlockIdSchema>;
+export type CheckpointId = z.infer<typeof checkpointIdSchema>;
+export type ContractId = z.infer<typeof contractIdSchema>;
+export type EvaluationId = z.infer<typeof evaluationIdSchema>;
+export type MasteryTrackId = z.infer<typeof masteryTrackIdSchema>;
+export type NotificationId = z.infer<typeof notificationIdSchema>;
+export type PenaltyId = z.infer<typeof penaltyIdSchema>;
+export type ProfileId = z.infer<typeof profileIdSchema>;
+export type PromptTemplateId = z.infer<typeof promptTemplateIdSchema>;
+export type SessionBlockId = z.infer<typeof sessionBlockIdSchema>;
+export type SessionEventId = z.infer<typeof sessionEventIdSchema>;
+export type SessionId = z.infer<typeof sessionIdSchema>;
+export type TelemetryEventId = z.infer<typeof telemetryEventIdSchema>;
+export type UserId = z.infer<typeof userIdSchema>;
+export type VivaAttemptId = z.infer<typeof vivaAttemptIdSchema>;

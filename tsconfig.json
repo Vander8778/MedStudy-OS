@@ -1,0 +1,34 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": true
+  },
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/contracts"
+    },
+    {
+      "path": "./packages/domain"
+    },
+    {
+      "path": "./packages/ai-schemas"
+    },
+    {
+      "path": "./packages/ui-kit"
+    },
+    {
+      "path": "./apps/mobile"
+    },
+    {
+      "path": "./apps/desktop"
+    },
+    {
+      "path": "./apps/web-admin"
+    },
+    {
+      "path": "./apps/backend"
+    }
+  ]
+}
