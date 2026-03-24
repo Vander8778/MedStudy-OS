@@ -1,4 +1,4 @@
-import type { ArtifactType } from "./enums";
+import type { ArtifactType } from "@medstudy/contracts";
 import type { DurationMinutes, ScoreValue } from "./time";
 
 export type ContractTerms = {

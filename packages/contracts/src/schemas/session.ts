@@ -44,12 +44,12 @@ export const sessionSchema = auditFieldsSchema.extend({
   warningCount: z.number().int().nonnegative(),
   missedCheckpointCount: z.number().int().nonnegative(),
   finalArtifactRequired: z.boolean(),
-  blockIds: z.array(sessionBlockIdSchema),
-  checkpointIds: z.array(checkpointIdSchema),
-  artifactIds: z.array(artifactIdSchema),
-  evaluationIds: z.array(evaluationIdSchema),
-  vivaAttemptIds: z.array(vivaAttemptIdSchema),
-  penaltyIds: z.array(penaltyIdSchema),
+  blockIds: z.array(sessionBlockIdSchema).readonly(),
+  checkpointIds: z.array(checkpointIdSchema).readonly(),
+  artifactIds: z.array(artifactIdSchema).readonly(),
+  evaluationIds: z.array(evaluationIdSchema).readonly(),
+  vivaAttemptIds: z.array(vivaAttemptIdSchema).readonly(),
+  penaltyIds: z.array(penaltyIdSchema).readonly(),
   notes: z.string().trim().min(1).optional(),
   metadata: metadataSchema.optional()
 });

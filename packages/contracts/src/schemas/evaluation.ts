@@ -15,7 +15,7 @@ export const evaluationSchema = auditFieldsSchema.extend({
   evaluatedAt: isoDateTimeStringSchema.optional(),
   score: scoreValueSchema.optional(),
   notes: z.string().trim().min(1).optional(),
-  evidenceArtifactIds: z.array(artifactIdSchema)
+  evidenceArtifactIds: z.array(artifactIdSchema).readonly()
 });
 
 export type Evaluation = z.infer<typeof evaluationSchema>;

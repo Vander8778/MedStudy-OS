@@ -1,8 +1,8 @@
 import type { AuditFields } from "../value-objects/common";
-import type { MasteryTrackStatus } from "../value-objects/enums";
 import type { MasteryTrackId, UserId } from "../value-objects/ids";
 import type { EntityCode } from "../value-objects/primitives";
 import type { ISODateTimeString, Percentage } from "../value-objects/time";
+import type { MasteryTrackStatus } from "@medstudy/contracts";
 
 export type MasteryTrack = AuditFields & {
   id: MasteryTrackId;

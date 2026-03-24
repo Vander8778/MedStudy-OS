@@ -1,7 +1,7 @@
 import type { AuditFields } from "../value-objects/common";
-import type { ProfileStudyStage, UserRole, UserStatus } from "../value-objects/enums";
 import type { AvatarId, ProfileId, UserId } from "../value-objects/ids";
 import type { EmailAddress, LocaleCode, TimezoneName } from "../value-objects/primitives";
+import type { ProfileStudyStage, UserRole, UserStatus } from "@medstudy/contracts";
 
 export type User = AuditFields & {
   id: UserId;

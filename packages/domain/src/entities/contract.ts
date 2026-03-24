@@ -1,8 +1,8 @@
 import type { AuditFields, MetadataMap } from "../value-objects/common";
 import type { ContractTerms } from "../value-objects/contract-terms";
-import type { ContractStatus } from "../value-objects/enums";
 import type { ContractId, UserId } from "../value-objects/ids";
 import type { ISODateTimeString, TimeRange } from "../value-objects/time";
+import type { ContractStatus } from "@medstudy/contracts";
 
 export type Contract = AuditFields & {
   id: ContractId;
