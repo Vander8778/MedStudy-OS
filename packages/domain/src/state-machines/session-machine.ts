@@ -6,6 +6,7 @@ import type {
 import type { Contract, Session } from "../entities";
 import {
   canCancelArming,
+  canPause,
   canExcuseByAdmin,
   canExpirePauseLimit,
   canExpireWarningGraceWindow,
@@ -61,6 +62,7 @@ export type SessionMachineContext = {
   now?: Session["createdAt"];
   warningResolvedInGraceWindow?: boolean;
   pauseWithinLimit?: boolean;
+  totalPauseDuration?: Session["validMinutes"];
   invalidBlockCleared?: boolean;
 };
 
@@ -99,6 +101,7 @@ const SESSION_TRANSITION_GUARDS: Partial<Record<GuardKey, SessionMachineGuard>> 
   "arming:cancel": canCancelArming,
   "arming:abort": canCancelArming,
   "armed:started": canStartSession,
+  "active_valid:paused": canPause,
   "active_warning:resumed": canResumeFromWarning,
   "active_warning:timeout": canExpireWarningGraceWindow,
   "paused_valid:resumed": canResumeFromPause,
@@ -163,6 +166,9 @@ function createPrimaryDomainEvent(
     case "paused":
       return { ...base, type: "session.paused" };
     case "resumed":
+      if (session.state === "active_warning") {
+        return { ...base, type: "session.warning_cleared" };
+      }
       return { ...base, type: "session.resumed" };
     case "completed":
       return { ...base, type: "session.completed" };
@@ -200,6 +206,59 @@ function createDomainEvents(
   return primaryEvent ? [stateChangedEvent, primaryEvent] : [stateChangedEvent];
 }
 
+// The state machine owns deterministic session-field mutations that can be derived directly
+// from the transition event itself. Duration-based counters such as invalidMinutes require
+// an explicit delta in the event/context surface and are intentionally left unchanged here
+// until that input exists in the approved contract.
+function applyTransitionEffects(
+  session: Session,
+  event: SessionMachineEvent,
+  toState: SessionState
+): Session {
+  let nextSession: Session = {
+    ...session,
+    state: toState,
+    updatedAt: event.occurredAt
+  };
+
+  if (event.type === "started") {
+    nextSession = {
+      ...nextSession,
+      startedAt: session.startedAt ?? event.occurredAt
+    };
+  }
+
+  if (event.type === "warning_raised") {
+    nextSession = {
+      ...nextSession,
+      warningCount: session.warningCount + 1
+    };
+  }
+
+  if (event.type === "review_requested" && toState === "review_pending") {
+    nextSession = {
+      ...nextSession,
+      endedAt: session.endedAt ?? event.occurredAt,
+      reviewRequestedAt: event.occurredAt
+    };
+  }
+
+  if (
+    (event.type === "completed" ||
+      event.type === "partial" ||
+      event.type === "failed" ||
+      event.type === "excused") &&
+    !nextSession.endedAt
+  ) {
+    nextSession = {
+      ...nextSession,
+      endedAt: event.occurredAt
+    };
+  }
+
+  return nextSession;
+}
+
 export function transition(
   session: Session,
   event: SessionMachineEvent,
@@ -233,10 +292,7 @@ export function transition(
   }
 
   const toState = allowedTargets[0];
-  const nextSession: Session = {
-    ...session,
-    state: toState
-  };
+  const nextSession = applyTransitionEffects(session, event, toState);
 
   return {
     ok: true,

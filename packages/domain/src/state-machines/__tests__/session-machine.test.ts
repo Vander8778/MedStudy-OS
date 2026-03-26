@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Contract, Session } from "../../entities";
-import { isActiveState, isPausedState, isTerminalState } from "../helpers";
+import {
+  isActiveState,
+  isOutcomeDecided,
+  isPausedState,
+  isTerminalState
+} from "../helpers";
 import {
   transition,
   type SessionMachineEvent,
@@ -160,14 +165,21 @@ describe("happy path", () => {
       "session.state_changed",
       "session.started"
     ]);
+    expect(startedResult.session.startedAt).toBe("2026-03-26T09:05:00+03:00");
+    expect(startedResult.session.updatedAt).toBe("2026-03-26T09:05:00+03:00");
     expect(reviewRequestedResult.domainEvents.map((event) => event.type)).toEqual([
       "session.state_changed",
       "session.review_started"
     ]);
+    expect(reviewRequestedResult.session.reviewRequestedAt).toBe("2026-03-26T10:45:00+03:00");
+    expect(reviewRequestedResult.session.endedAt).toBe("2026-03-26T10:45:00+03:00");
+    expect(reviewRequestedResult.session.updatedAt).toBe("2026-03-26T10:45:00+03:00");
     expect(completedResult.domainEvents.map((event) => event.type)).toEqual([
       "session.state_changed",
       "session.completed"
     ]);
+    expect(completedResult.session.endedAt).toBe("2026-03-26T10:45:00+03:00");
+    expect(completedResult.session.updatedAt).toBe("2026-03-26T10:50:00+03:00");
   });
 });
 
@@ -189,6 +201,8 @@ describe("warning flow", () => {
     );
 
     expect(result.toState).toBe("active_warning");
+    expect(result.session.warningCount).toBe(1);
+    expect(result.session.updatedAt).toBe("2026-03-26T09:15:00+03:00");
     expect(result.domainEvents.map((event) => event.type)).toEqual([
       "session.state_changed",
       "session.warning_raised"
@@ -211,9 +225,10 @@ describe("warning flow", () => {
     );
 
     expect(result.toState).toBe("active_valid");
+    expect(result.session.updatedAt).toBe("2026-03-26T09:20:00+03:00");
     expect(result.domainEvents.map((event) => event.type)).toEqual([
       "session.state_changed",
-      "session.resumed"
+      "session.warning_cleared"
     ]);
   });
 
@@ -238,6 +253,52 @@ describe("warning flow", () => {
       "session.invalid_block_started"
     ]);
   });
+
+  it("increments warningCount across repeated warning cycles", () => {
+    const firstWarning = expectSuccess(
+      transition(
+        createSession("active_valid", { warningCount: 0 }),
+        createEvent({
+          id: "evt_warning_first",
+          type: "warning_raised",
+          occurredAt: "2026-03-26T09:10:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    const recovered = expectSuccess(
+      transition(
+        firstWarning.session,
+        createEvent({
+          id: "evt_warning_first_cleared",
+          type: "resumed",
+          reason: "warning_resolved",
+          occurredAt: "2026-03-26T09:12:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        { warningResolvedInGraceWindow: true }
+      )
+    );
+
+    const secondWarning = expectSuccess(
+      transition(
+        recovered.session,
+        createEvent({
+          id: "evt_warning_second",
+          type: "warning_raised",
+          occurredAt: "2026-03-26T09:14:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(firstWarning.session.warningCount).toBe(1);
+    expect(recovered.session.warningCount).toBe(1);
+    expect(secondWarning.session.warningCount).toBe(2);
+  });
 });
 
 describe("pause flow", () => {
@@ -253,7 +314,7 @@ describe("pause flow", () => {
           occurredAt: "2026-03-26T09:30:00+03:00" as Session["createdAt"]
         }),
         contract,
-        {}
+        { totalPauseDuration: 5 as Session["validMinutes"] }
       )
     );
 
@@ -306,6 +367,99 @@ describe("pause flow", () => {
       "session.state_changed"
     ]);
   });
+
+  it("transitions paused_expired -> review_pending on review_requested", () => {
+    const result = expectSuccess(
+      transition(
+        createSession("paused_expired"),
+        createEvent({
+          id: "evt_pause_expired_review",
+          type: "review_requested",
+          occurredAt: "2026-03-26T09:50:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(result.toState).toBe("review_pending");
+    expect(result.session.reviewRequestedAt).toBe("2026-03-26T09:50:00+03:00");
+    expect(result.session.endedAt).toBe("2026-03-26T09:50:00+03:00");
+    expect(result.domainEvents.map((event) => event.type)).toEqual([
+      "session.state_changed",
+      "session.review_started"
+    ]);
+  });
+});
+
+describe("arming cancellation flow", () => {
+  const contract = createContract();
+
+  it("transitions arming -> planned on cancel", () => {
+    const result = expectSuccess(
+      transition(
+        createSession("arming"),
+        createEvent({
+          id: "evt_cancel",
+          type: "cancel",
+          occurredAt: "2026-03-26T09:02:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(result.toState).toBe("planned");
+    expect(result.domainEvents.map((event) => event.type)).toEqual([
+      "session.state_changed"
+    ]);
+  });
+
+  it("transitions arming -> planned on abort", () => {
+    const result = expectSuccess(
+      transition(
+        createSession("arming"),
+        createEvent({
+          id: "evt_abort",
+          type: "abort",
+          occurredAt: "2026-03-26T09:03:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(result.toState).toBe("planned");
+    expect(result.domainEvents.map((event) => event.type)).toEqual([
+      "session.state_changed"
+    ]);
+  });
+});
+
+describe("invalid block recovery flow", () => {
+  const contract = createContract();
+
+  it("transitions invalid_block -> active_valid when admin-cleared", () => {
+    const result = expectSuccess(
+      transition(
+        createSession("invalid_block"),
+        createEvent({
+          id: "evt_invalid_block_admin_clear",
+          type: "resumed",
+          reason: "admin_clear",
+          occurredAt: "2026-03-26T09:40:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        { invalidBlockCleared: true }
+      )
+    );
+
+    expect(result.toState).toBe("active_valid");
+    expect(result.domainEvents.map((event) => event.type)).toEqual([
+      "session.state_changed",
+      "session.resumed"
+    ]);
+  });
 });
 
 describe("review flow", () => {
@@ -326,6 +480,7 @@ describe("review flow", () => {
     );
 
     expect(result.toState).toBe("completed");
+    expect(result.session.endedAt).toBe("2026-03-26T10:00:00+03:00");
   });
 
   it("transitions review_pending -> partial", () => {
@@ -343,6 +498,7 @@ describe("review flow", () => {
     );
 
     expect(result.toState).toBe("partial");
+    expect(result.session.endedAt).toBe("2026-03-26T10:01:00+03:00");
   });
 
   it("transitions review_pending -> failed", () => {
@@ -360,6 +516,7 @@ describe("review flow", () => {
     );
 
     expect(result.toState).toBe("failed");
+    expect(result.session.endedAt).toBe("2026-03-26T10:02:00+03:00");
   });
 });
 
@@ -590,6 +747,24 @@ describe("terminal state protection", () => {
     expect(result.code).toBe("EVENT_NOT_ALLOWED");
   });
 
+  it("rejects unrelated outbound transitions from failed", () => {
+    const result = expectFailure(
+      transition(
+        createSession("failed"),
+        createEvent({
+          id: "evt_failed_resume",
+          type: "resumed",
+          reason: "pause_within_limit",
+          occurredAt: "2026-03-26T10:19:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        { pauseWithinLimit: true }
+      )
+    );
+
+    expect(result.code).toBe("EVENT_NOT_ALLOWED");
+  });
+
   it("allows penalized -> excused as the sole exception", () => {
     const result = expectSuccess(
       transition(
@@ -634,18 +809,22 @@ describe("guard failures", () => {
     expect(result.code).toBe("GUARD_FAILED");
   });
 
-  it("rejects resume when pause is over the limit", () => {
+  it("rejects pause when the total pause is already over the limit", () => {
     const result = expectFailure(
       transition(
-        createSession("paused_valid"),
+        createSession("active_valid"),
         createEvent({
-          id: "evt_pause_resume_rejected",
-          type: "resumed",
-          reason: "pause_within_limit",
+          id: "evt_pause_rejected",
+          type: "paused",
           occurredAt: "2026-03-26T10:20:00+03:00" as Session["createdAt"]
         }),
-        contract,
-        { pauseWithinLimit: false }
+        createContract({
+          terms: {
+            ...contract.terms,
+            maxPauseMinutes: 10 as Contract["terms"]["maxPauseMinutes"]
+          }
+        }),
+        { totalPauseDuration: 10 as Session["validMinutes"] }
       )
     );
 
@@ -671,8 +850,100 @@ describe("guard failures", () => {
   });
 });
 
+describe("transition invariants", () => {
+  const contract = createContract();
+
+  it("keeps missedCheckpointCount monotonic across transitions that do not modify it", () => {
+    const session = createSession("active_valid", { missedCheckpointCount: 2 });
+    const result = expectSuccess(
+      transition(
+        session,
+        createEvent({
+          id: "evt_review_from_active_valid",
+          type: "review_requested",
+          occurredAt: "2026-03-26T10:30:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(result.session.missedCheckpointCount).toBe(2);
+  });
+
+  it("keeps valid and invalid time credit unchanged when no explicit delta is provided", () => {
+    const session = createSession("active_warning", {
+      validMinutes: 40 as Session["validMinutes"],
+      invalidMinutes: 7 as Session["invalidMinutes"]
+    });
+    const result = expectSuccess(
+      transition(
+        session,
+        createEvent({
+          id: "evt_warning_timeout_invariant",
+          type: "timeout",
+          reason: "warning_grace_expired",
+          occurredAt: "2026-03-26T10:31:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(result.session.validMinutes).toBe(40);
+    expect(result.session.invalidMinutes).toBe(7);
+  });
+
+  it("emits state_changed before the primary domain event with matching from/to states", () => {
+    const session = createSession("active_valid");
+    const result = expectSuccess(
+      transition(
+        session,
+        createEvent({
+          id: "evt_warning_consistency",
+          type: "warning_raised",
+          occurredAt: "2026-03-26T10:32:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(result.domainEvents.map((event) => event.type)).toEqual([
+      "session.state_changed",
+      "session.warning_raised"
+    ]);
+    expect(result.domainEvents[0]).toMatchObject({
+      type: "session.state_changed",
+      fromState: "active_valid",
+      toState: "active_warning"
+    });
+  });
+
+  it("uses event.occurredAt as the causal timestamp for session mutation and domain events", () => {
+    const result = expectSuccess(
+      transition(
+        createSession("armed"),
+        createEvent({
+          id: "evt_started_causal",
+          type: "started",
+          occurredAt: "2026-03-26T09:05:00+03:00" as Session["createdAt"]
+        }),
+        contract,
+        {}
+      )
+    );
+
+    expect(result.session.startedAt).toBe("2026-03-26T09:05:00+03:00");
+    expect(result.session.updatedAt).toBe("2026-03-26T09:05:00+03:00");
+    expect(
+      result.domainEvents.every((event) => event.occurredAt === "2026-03-26T09:05:00+03:00")
+    ).toBe(true);
+  });
+});
+
 describe("state helpers", () => {
-  it("classifies active, paused, and terminal states", () => {
+  it("classifies active, paused, terminal, and outcome-decided states", () => {
     expect(isActiveState("active_valid")).toBe(true);
     expect(isActiveState("active_warning")).toBe(true);
     expect(isPausedState("paused_valid")).toBe(true);
@@ -683,5 +954,11 @@ describe("state helpers", () => {
     expect(isTerminalState("excused")).toBe(true);
     expect(isTerminalState("active_valid")).toBe(false);
     expect(isTerminalState("failed")).toBe(false);
+    expect(isOutcomeDecided("completed")).toBe(true);
+    expect(isOutcomeDecided("partial")).toBe(true);
+    expect(isOutcomeDecided("failed")).toBe(true);
+    expect(isOutcomeDecided("penalized")).toBe(true);
+    expect(isOutcomeDecided("excused")).toBe(true);
+    expect(isOutcomeDecided("active_valid")).toBe(false);
   });
 });

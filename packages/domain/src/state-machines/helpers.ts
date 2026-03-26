@@ -7,6 +7,14 @@ export const TERMINAL_SESSION_STATES: readonly SessionState[] = [
   "excused"
 ] as const;
 
+export const OUTCOME_DECIDED_STATES: readonly SessionState[] = [
+  "completed",
+  "partial",
+  "failed",
+  "penalized",
+  "excused"
+] as const;
+
 export const ACTIVE_SESSION_STATES: readonly SessionState[] = [
   "active_valid",
   "active_warning"
@@ -19,6 +27,10 @@ export const PAUSED_SESSION_STATES: readonly SessionState[] = [
 
 export function isTerminalState(state: SessionState): boolean {
   return TERMINAL_SESSION_STATES.includes(state);
+}
+
+export function isOutcomeDecided(state: SessionState): boolean {
+  return OUTCOME_DECIDED_STATES.includes(state);
 }
 
 export function isActiveState(state: SessionState): boolean {

@@ -12,6 +12,19 @@ export const canStartSession: SessionMachineGuard = (session, event) =>
 export const canCancelArming: SessionMachineGuard = (_session, event) =>
   event.type === "cancel" || event.type === "abort";
 
+export const canPause: SessionMachineGuard = (_session, event, contract, context) => {
+  if (event.type !== "paused") {
+    return false;
+  }
+
+  if (contract.terms.maxPauseMinutes === undefined) {
+    return true;
+  }
+
+  const totalPause = context.totalPauseDuration ?? 0;
+  return totalPause < contract.terms.maxPauseMinutes;
+};
+
 export const canResumeFromWarning: SessionMachineGuard = (_session, event, _contract, context) =>
   event.type === "resumed" &&
   event.reason === "warning_resolved" &&
