@@ -2,6 +2,20 @@ import { describe, expect, it } from "vitest";
 import { domainEventSchema } from "../domain-events";
 
 describe("domainEventSchema", () => {
+  it("accepts a session.state_changed event", () => {
+    const parsed = domainEventSchema.parse({
+      id: "event_state_changed",
+      type: "session.state_changed",
+      occurredAt: "2026-03-25T09:05:00+03:00",
+      sessionId: "session_1",
+      userId: "user_1",
+      fromState: "arming",
+      toState: "armed"
+    });
+
+    expect(parsed.type).toBe("session.state_changed");
+  });
+
   it("accepts a session.started event", () => {
     const parsed = domainEventSchema.parse({
       id: "event_session_started",
@@ -25,6 +39,30 @@ describe("domainEventSchema", () => {
     });
 
     expect(parsed.type).toBe("checkpoint.missed");
+  });
+
+  it("accepts a session.warning_cleared event", () => {
+    const parsed = domainEventSchema.parse({
+      id: "event_warning_cleared",
+      type: "session.warning_cleared",
+      occurredAt: "2026-03-25T09:45:00+03:00",
+      sessionId: "session_1",
+      userId: "user_1"
+    });
+
+    expect(parsed.type).toBe("session.warning_cleared");
+  });
+
+  it("accepts a session.invalid_block_started event", () => {
+    const parsed = domainEventSchema.parse({
+      id: "event_invalid_block_started",
+      type: "session.invalid_block_started",
+      occurredAt: "2026-03-25T10:00:00+03:00",
+      sessionId: "session_1",
+      userId: "user_1"
+    });
+
+    expect(parsed.type).toBe("session.invalid_block_started");
   });
 
   it("accepts an evaluation.completed event", () => {
