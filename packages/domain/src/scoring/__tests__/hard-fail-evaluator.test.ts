@@ -49,6 +49,32 @@ describe("evaluateHardFailConditions", () => {
     });
   });
 
+  it("does not fail when validMinutes equals the threshold", () => {
+    const result = evaluateHardFailConditions(
+      createScoringInput({
+        session: {
+          ...createScoringInput().session,
+          validMinutes: 60
+        }
+      })
+    );
+
+    expect(result.reasons).not.toContain("insufficient_valid_time");
+  });
+
+  it("fails when validMinutes is just below the threshold", () => {
+    const result = evaluateHardFailConditions(
+      createScoringInput({
+        session: {
+          ...createScoringInput().session,
+          validMinutes: 59
+        }
+      })
+    );
+
+    expect(result.reasons).toContain("insufficient_valid_time");
+  });
+
   it("flags missing mandatory artifact", () => {
     const result = evaluateHardFailConditions(
       createScoringInput({
@@ -60,6 +86,23 @@ describe("evaluateHardFailConditions", () => {
     );
 
     expect(result.reasons).toEqual(["mandatory_artifact_missing"]);
+  });
+
+  it("does not fail for a missing final artifact when no final artifact is required", () => {
+    const result = evaluateHardFailConditions(
+      createScoringInput({
+        session: {
+          ...createScoringInput().session,
+          finalArtifactRequired: false
+        },
+        hardFailSignals: {
+          mandatoryFinalArtifactMissing: true,
+          criticalContractViolation: false
+        }
+      })
+    );
+
+    expect(result.reasons).not.toContain("mandatory_artifact_missing");
   });
 
   it("flags exceeded missed checkpoints", () => {
@@ -75,6 +118,19 @@ describe("evaluateHardFailConditions", () => {
     expect(result.reasons).toEqual(["exceeded_missed_checkpoints"]);
   });
 
+  it("does not fail when missedCheckpointCount equals the threshold", () => {
+    const result = evaluateHardFailConditions(
+      createScoringInput({
+        session: {
+          ...createScoringInput().session,
+          missedCheckpointCount: 1
+        }
+      })
+    );
+
+    expect(result.reasons).not.toContain("exceeded_missed_checkpoints");
+  });
+
   it("flags viva below threshold", () => {
     const result = evaluateHardFailConditions(
       createScoringInput({
@@ -87,6 +143,20 @@ describe("evaluateHardFailConditions", () => {
     );
 
     expect(result.reasons).toEqual(["viva_below_threshold"]);
+  });
+
+  it("does not fail when vivaScore equals the threshold", () => {
+    const result = evaluateHardFailConditions(
+      createScoringInput({
+        hardFailSignals: {
+          mandatoryFinalArtifactMissing: false,
+          criticalContractViolation: false,
+          vivaScore: 70
+        }
+      })
+    );
+
+    expect(result.reasons).not.toContain("viva_below_threshold");
   });
 
   it("flags critical contract violation", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateWeightedSessionScore } from "..";
+import { calculateWeightedSessionScore, getComponentScore } from "..";
 
 describe("calculateWeightedSessionScore", () => {
   it("calculates a weighted score when all components are present", () => {
@@ -69,14 +69,39 @@ describe("calculateWeightedSessionScore", () => {
     expect(result.sessionScore).toBe(40);
   });
 
-  it("rounds the final weighted score to two decimals", () => {
+  it("rounds the final weighted score to two decimals for repeating decimals", () => {
     const result = calculateWeightedSessionScore({
-      validTimeScore: 85,
-      processScore: 85,
-      artifactScore: 85,
-      knowledgeScore: 84.975
+      validTimeScore: 80,
+      processScore: 70,
+      artifactScore: 70,
+      knowledgeScore: 78.3333333333
     });
 
-    expect(result.sessionScore).toBe(85);
+    expect(result.sessionScore).toBe(74.17);
+  });
+
+  it("returns a component score by its normalized component name", () => {
+    const components = {
+      validTimeScore: 91,
+      processScore: 72,
+      artifactScore: 83,
+      knowledgeScore: 64
+    };
+
+    expect(getComponentScore(components, "validTime")).toBe(91);
+    expect(getComponentScore(components, "process")).toBe(72);
+    expect(getComponentScore(components, "artifact")).toBe(83);
+    expect(getComponentScore(components, "knowledge")).toBe(64);
+  });
+
+  it("returns undefined for a missing component score", () => {
+    expect(
+      getComponentScore(
+        {
+          validTimeScore: 91
+        },
+        "artifact"
+      )
+    ).toBeUndefined();
   });
 });

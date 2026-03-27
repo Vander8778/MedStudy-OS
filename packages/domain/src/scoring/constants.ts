@@ -5,6 +5,13 @@ export const PROCESS_WEIGHT = 0.2;
 export const ARTIFACT_WEIGHT = 0.25;
 export const KNOWLEDGE_WEIGHT = 0.2;
 
+const WEIGHT_SUM =
+  VALID_TIME_WEIGHT + PROCESS_WEIGHT + ARTIFACT_WEIGHT + KNOWLEDGE_WEIGHT;
+
+if (Math.abs(WEIGHT_SUM - 1.0) > 1e-10) {
+  throw new Error(`Scoring weights must sum to 1.0, got ${WEIGHT_SUM}`);
+}
+
 export const COMPLETED_THRESHOLD = 85;
 export const PARTIAL_THRESHOLD = 65;
 
