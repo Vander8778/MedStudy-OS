@@ -4,6 +4,7 @@ import {
 } from "@nestjs/common";
 import {
   evaluateContractRules,
+  isOutcomeDecided,
   scoreSession,
   transition,
   type AntiAvoidanceResult,
@@ -11,11 +12,13 @@ import {
   type Checkpoint,
   type ContractRuleEvaluationInput,
   type Penalty,
+  type ResumeReason,
   type ScoringInput,
   type Session,
   type SessionEvent,
   type SessionMachineEvent,
-  type SessionMachineContext
+  type SessionMachineContext,
+  type TimeoutReason
 } from "@medstudy/domain";
 import { createId } from "../../common/backend-utils";
 import { AuditService } from "../audit/audit.service";
@@ -49,6 +52,14 @@ type SessionActionOptions = {
   reason?: string;
   context?: SessionMachineContext;
   actor?: SessionActionActor;
+};
+
+type ReviewEvidenceSnapshot = {
+  submittedArtifactTypes: readonly Artifact["type"][];
+  latestVivaScore?: number;
+  vivaRequired: boolean;
+  vivaAttempted: boolean;
+  totalPauseMinutes: number;
 };
 
 @Injectable()
@@ -85,42 +96,55 @@ export class SessionOrchestrator {
   }
 
   private createMachineEvent(
+    type: "resumed",
+    actor: SessionActionActor | undefined,
+    reason: ResumeReason
+  ): Extract<SessionMachineEvent, { type: "resumed" }>;
+  private createMachineEvent(
+    type: "timeout",
+    actor: SessionActionActor | undefined,
+    reason: TimeoutReason
+  ): Extract<SessionMachineEvent, { type: "timeout" }>;
+  private createMachineEvent(
+    type: Exclude<SessionMachineEvent["type"], "resumed" | "timeout">,
+    actor?: SessionActionActor
+  ): SessionMachineEvent;
+  private createMachineEvent(
     type: SessionMachineEvent["type"],
     actor?: SessionActionActor,
-    reason?: string
+    reason?: ResumeReason | TimeoutReason
   ): SessionMachineEvent {
     const base = {
       id: createId("session_event"),
-      type,
       occurredAt: new Date().toISOString() as Session["createdAt"],
       actorType: actor?.actorType
     } as const;
 
-    if (type === "resumed") {
-      return {
-        ...base,
-        type,
-        reason: reason as Extract<SessionMachineEvent, { type: "resumed" }>["reason"]
-      };
+    switch (type) {
+      case "resumed":
+        return {
+          ...base,
+          type: "resumed",
+          reason
+        };
+      case "timeout":
+        return {
+          ...base,
+          type: "timeout",
+          reason
+        };
+      case "excused":
+        return {
+          ...base,
+          type: "excused",
+          actorType: actor?.actorType ?? "admin"
+        };
+      default:
+        return {
+          ...base,
+          type
+        } as SessionMachineEvent;
     }
-
-    if (type === "timeout") {
-      return {
-        ...base,
-        type,
-        reason: reason as Extract<SessionMachineEvent, { type: "timeout" }>["reason"]
-      };
-    }
-
-    if (type === "excused") {
-      return {
-        ...base,
-        type,
-        actorType: actor?.actorType ?? "admin"
-      };
-    }
-
-    return base as SessionMachineEvent;
   }
 
   private assertTransitionSucceeded(result: ReturnType<typeof transition>) {
@@ -205,16 +229,47 @@ export class SessionOrchestrator {
     });
   }
 
-  private buildContractEvaluationInput(aggregate: SessionAggregate): ContractRuleEvaluationInput {
-    const submittedArtifactTypes = aggregate.artifacts
+  private getSubmittedArtifactTypes(aggregate: SessionAggregate): readonly Artifact["type"][] {
+    return aggregate.artifacts
       .filter((artifact) => artifact.status === "submitted" || artifact.status === "accepted")
       .map((artifact) => artifact.type);
-    const mandatoryFinalArtifactMissing =
-      aggregate.session.finalArtifactRequired &&
-      !submittedArtifactTypes.includes("final_submission" as Artifact["type"]);
+  }
+
+  private getLatestVivaScore(aggregate: SessionAggregate): number | undefined {
     const latestViva = [...aggregate.vivaAttempts]
       .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
-    const totalPauseMinutes = 0;
+
+    return latestViva?.score;
+  }
+
+  private getTotalPauseMinutes(aggregate: SessionAggregate): number {
+    return aggregate.blocks
+      .filter((block) => block.type === "pause")
+      .reduce((totalMinutes, block) => {
+        const rangeMinutes =
+          (Date.parse(block.range.endsAt) - Date.parse(block.range.startsAt)) / 60000;
+
+        return totalMinutes + Math.max(rangeMinutes, 0);
+      }, 0);
+  }
+
+  private buildReviewEvidenceSnapshot(aggregate: SessionAggregate): ReviewEvidenceSnapshot {
+    return {
+      submittedArtifactTypes: this.getSubmittedArtifactTypes(aggregate),
+      latestVivaScore: this.getLatestVivaScore(aggregate),
+      vivaRequired: aggregate.vivaAttempts.length > 0,
+      vivaAttempted: aggregate.vivaAttempts.length > 0,
+      totalPauseMinutes: this.getTotalPauseMinutes(aggregate)
+    };
+  }
+
+  private buildContractEvaluationInput(
+    aggregate: SessionAggregate,
+    evidence: ReviewEvidenceSnapshot
+  ): ContractRuleEvaluationInput {
+    const mandatoryFinalArtifactMissing =
+      aggregate.session.finalArtifactRequired &&
+      !evidence.submittedArtifactTypes.includes("final_submission" as Artifact["type"]);
 
     return {
       contract: {
@@ -234,22 +289,35 @@ export class SessionOrchestrator {
         warningCount: aggregate.session.warningCount,
         missedCheckpointCount: aggregate.session.missedCheckpointCount,
         totalCheckpointCount: aggregate.checkpoints.length,
-        totalPauseMinutes,
+        totalPauseMinutes: evidence.totalPauseMinutes,
         finalArtifactRequired: aggregate.session.finalArtifactRequired,
-        submittedArtifactTypes
+        submittedArtifactTypes: evidence.submittedArtifactTypes
       },
       signals: {
         mandatoryFinalArtifactMissing,
-        vivaScore: latestViva?.score,
-        vivaRequired: aggregate.vivaAttempts.length > 0,
-        vivaAttempted: aggregate.vivaAttempts.length > 0
+        vivaScore: evidence.latestVivaScore,
+        vivaRequired: evidence.vivaRequired,
+        vivaAttempted: evidence.vivaAttempted
       }
     };
   }
 
+  private getMandatoryFinalArtifactMissing(
+    contractEvaluation: ReturnType<typeof evaluateContractRules>
+  ): boolean {
+    const artifactRule = contractEvaluation.rules.find(
+      (rule) =>
+        rule.code === "mandatory_artifacts_missing" ||
+        rule.code === "mandatory_artifacts_complete"
+    );
+
+    return artifactRule?.details?.mandatoryFinalArtifactMissing === true;
+  }
+
   private buildScoringInput(
     aggregate: SessionAggregate,
-    contractEvaluation: ReturnType<typeof evaluateContractRules>
+    contractEvaluation: ReturnType<typeof evaluateContractRules>,
+    evidence: ReviewEvidenceSnapshot
   ): ScoringInput {
     const validTimeScore = Math.min(
       100,
@@ -270,16 +338,9 @@ export class SessionOrchestrator {
       aggregate.contract.terms.mandatoryArtifactTypes.length === 0
         ? 100
         : (submittedMandatoryCount / aggregate.contract.terms.mandatoryArtifactTypes.length) * 100;
-    const latestViva = [...aggregate.vivaAttempts]
-      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
-    const knowledgeScore = latestViva?.score ?? 100;
+    const knowledgeScore = evidence.latestVivaScore ?? 100;
     const mandatoryFinalArtifactMissing =
-      aggregate.session.finalArtifactRequired &&
-      !aggregate.artifacts.some(
-        (artifact) =>
-          artifact.type === "final_submission" &&
-          (artifact.status === "submitted" || artifact.status === "accepted")
-      );
+      this.getMandatoryFinalArtifactMissing(contractEvaluation);
 
     return {
       contract: {
@@ -309,7 +370,7 @@ export class SessionOrchestrator {
       hardFailSignals: {
         mandatoryFinalArtifactMissing,
         criticalContractViolation: contractEvaluation.hasCriticalViolation,
-        vivaScore: latestViva?.score
+        vivaScore: evidence.latestVivaScore
       }
     };
   }
@@ -532,6 +593,8 @@ export class SessionOrchestrator {
       metadata?: Record<string, unknown>;
     }
   ) {
+    // Artifact submission is intentionally modeled as a persisted side-effect plus audit event.
+    // Checkpoint satisfaction stays outside this MVP and will be integrated later by orchestration.
     return this.sessionRepository.withTransaction(async (db) => {
       const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId, db);
       const now = new Date().toISOString();
@@ -578,6 +641,19 @@ export class SessionOrchestrator {
   async requestReview(sessionId: string, options: { actor?: SessionActionActor } = {}) {
     const result = await this.sessionRepository.withTransaction(async (db) => {
       const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId, db);
+
+      if (aggregate.session.state === "review_pending") {
+        throw new BadRequestException(
+          `Session ${sessionId} already has a review in progress.`
+        );
+      }
+
+      if (isOutcomeDecided(aggregate.session.state)) {
+        throw new BadRequestException(
+          `Session ${sessionId} already has a decided outcome (${aggregate.session.state}).`
+        );
+      }
+
       const reviewEvent = this.createMachineEvent("review_requested", options.actor);
       const reviewTransition = this.assertTransitionSucceeded(
         transition(aggregate.session, reviewEvent, aggregate.contract, {})
@@ -594,9 +670,17 @@ export class SessionOrchestrator {
         ...aggregate,
         session: reviewTransition.session
       };
-      const contractEvaluationInput = this.buildContractEvaluationInput(reviewAggregate);
+      const evidence = this.buildReviewEvidenceSnapshot(reviewAggregate);
+      const contractEvaluationInput = this.buildContractEvaluationInput(
+        reviewAggregate,
+        evidence
+      );
       const contractEvaluation = evaluateContractRules(contractEvaluationInput);
-      const scoringInput = this.buildScoringInput(reviewAggregate, contractEvaluation);
+      const scoringInput = this.buildScoringInput(
+        reviewAggregate,
+        contractEvaluation,
+        evidence
+      );
       const scoringResult = scoreSession(scoringInput);
 
       if (!scoringResult.ok) {
@@ -676,6 +760,9 @@ export class SessionOrchestrator {
   }
 
   async processAvoidanceAssessment(sessionId: string, assessment: AntiAvoidanceResult) {
+    // MVP note: this flow is intentionally not a single cross-step transaction.
+    // We persist the avoidance assessment first, then route follow-up actions through their
+    // own orchestrated transactions so session lifecycle mutations still go through M2.
     await this.auditService.saveAntiAvoidanceResult(sessionId, assessment);
 
     if (assessment.recommendedResponses.includes("raise_warning")) {

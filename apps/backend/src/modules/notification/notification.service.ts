@@ -10,6 +10,8 @@ export type NotificationDispatch = {
 
 @Injectable()
 export class NotificationService {
+  // MVP stub only: notifications are in-memory and non-durable. This supports orchestration
+  // signaling during development but is not an auditable delivery system yet.
   private readonly dispatched: NotificationDispatch[] = [];
 
   notify(dispatch: NotificationDispatch) {

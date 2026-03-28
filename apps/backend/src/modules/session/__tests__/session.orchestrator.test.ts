@@ -11,9 +11,12 @@ vi.mock("@medstudy/domain", async (importOriginal) => {
 });
 
 import {
+  type AntiAvoidanceResult,
   evaluateContractRules,
+  isOutcomeDecided,
   scoreSession,
   type Contract,
+  type SessionBlock,
   type Session
 } from "@medstudy/domain";
 import { SessionOrchestrator } from "../session.orchestrator";
@@ -71,6 +74,7 @@ function createAggregate(state: Session["state"]) {
   return {
     session,
     contract,
+    blocks: [] as SessionBlock[],
     artifacts: [
       {
         id: "artifact_1",
@@ -269,6 +273,94 @@ describe("SessionOrchestrator", () => {
     expect(result.session.state).toBe("completed");
   });
 
+  it("passes persisted pause-block totals into M4 contract evaluation", async () => {
+    const aggregate = createAggregate("active_valid");
+    aggregate.blocks = [
+      {
+        id: "block_pause_1",
+        sessionId: "session_1",
+        type: "pause",
+        range: {
+          startsAt: "2026-03-28T09:30:00.000Z",
+          endsAt: "2026-03-28T09:42:00.000Z"
+        },
+        creditedMinutes: 0,
+        createdAt: "2026-03-28T09:30:00.000Z",
+        updatedAt: "2026-03-28T09:42:00.000Z"
+      }
+    ];
+    const repository = {
+      withTransaction: vi.fn(async (callback) => callback({ tx: true })),
+      findSessionAggregateOrThrow: vi.fn(async () => aggregate),
+      saveSession: vi.fn(async (session) => {
+        aggregate.session = session;
+        return session;
+      }),
+      saveSessionEvent: vi.fn(async () => undefined),
+      createSessionBundle: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn()
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = { getContract: vi.fn() };
+
+    vi.mocked(evaluateContractRules).mockImplementation(((input) => {
+      expect(input.session.totalPauseMinutes).toBe(12);
+      return {
+        allRulesPassed: true,
+        hasCriticalViolation: false,
+        rules: [],
+        criticalViolations: [],
+        warnings: [],
+        informational: []
+      };
+    }) as typeof evaluateContractRules);
+
+    vi.mocked(scoreSession).mockReturnValue({
+      ok: true,
+      result: {
+        outcome: "completed",
+        sessionScore: 90,
+        components: {
+          validTime: { raw: 100, weight: 0.35, weighted: 35 },
+          process: { raw: 90, weight: 0.2, weighted: 18 },
+          artifact: { raw: 100, weight: 0.25, weighted: 25 },
+          knowledge: { raw: 60, weight: 0.2, weighted: 12 }
+        },
+        hardFail: { triggered: false, reasons: [] },
+        decisionTrace: { decidedByHardFail: false }
+      }
+    } as ReturnType<typeof scoreSession>);
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await orchestrator.requestReview("session_1");
+
+    expect(evaluateContractRules).toHaveBeenCalledTimes(1);
+  });
+
   it("maps a partial M3 outcome into the M2 partial outcome transition", async () => {
     const aggregate = createAggregate("active_valid");
     const repository = {
@@ -341,6 +433,140 @@ describe("SessionOrchestrator", () => {
     const result = await orchestrator.requestReview("session_1");
 
     expect(result.session.state).toBe("partial");
+  });
+
+  it("uses M4 artifact-rule details as the single source of truth for mandatoryFinalArtifactMissing", async () => {
+    const aggregate = createAggregate("active_valid");
+    aggregate.artifacts = [];
+    const repository = {
+      withTransaction: vi.fn(async (callback) => callback({ tx: true })),
+      findSessionAggregateOrThrow: vi.fn(async () => aggregate),
+      saveSession: vi.fn(async (session) => {
+        aggregate.session = session;
+        return session;
+      }),
+      saveSessionEvent: vi.fn(async () => undefined),
+      createSessionBundle: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn()
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = { getContract: vi.fn() };
+
+    vi.mocked(evaluateContractRules).mockReturnValue({
+      allRulesPassed: false,
+      hasCriticalViolation: false,
+      rules: [
+        {
+          code: "mandatory_artifacts_missing",
+          passed: false,
+          severity: "critical",
+          message: "Mandatory artifacts required by the contract are missing.",
+          details: {
+            missingArtifactTypes: ["final_submission"],
+            mandatoryFinalArtifactMissing: false
+          }
+        }
+      ],
+      criticalViolations: [],
+      warnings: [],
+      informational: []
+    } as ReturnType<typeof evaluateContractRules>);
+
+    vi.mocked(scoreSession).mockImplementation(((input) => {
+      expect(input.hardFailSignals.mandatoryFinalArtifactMissing).toBe(false);
+      expect(input.hardFailSignals.vivaScore).toBe(82);
+      return {
+        ok: true,
+        result: {
+          outcome: "failed",
+          sessionScore: 40,
+          components: {
+            validTime: { raw: 100, weight: 0.35, weighted: 35 },
+            process: { raw: 5, weight: 0.2, weighted: 1 },
+            artifact: { raw: 0, weight: 0.25, weighted: 0 },
+            knowledge: { raw: 20, weight: 0.2, weighted: 4 }
+          },
+          hardFail: { triggered: true, reasons: [] },
+          decisionTrace: { decidedByHardFail: true }
+        }
+      };
+    }) as typeof scoreSession);
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await orchestrator.requestReview("session_1");
+
+    expect(scoreSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("guards early against duplicate review requests once an outcome is already decided", async () => {
+    const aggregate = createAggregate("completed");
+    expect(isOutcomeDecided(aggregate.session.state)).toBe(true);
+
+    const repository = {
+      withTransaction: vi.fn(async (callback) => callback({ tx: true })),
+      findSessionAggregateOrThrow: vi.fn(async () => aggregate),
+      saveSession: vi.fn(),
+      saveSessionEvent: vi.fn(),
+      createSessionBundle: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn()
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = { getContract: vi.fn() };
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await expect(orchestrator.requestReview("session_1")).rejects.toThrow(
+      "already has a decided outcome"
+    );
+    expect(evaluateContractRules).not.toHaveBeenCalled();
+    expect(scoreSession).not.toHaveBeenCalled();
   });
 
   it("persists a penalty record inside the penalize flow transaction", async () => {
@@ -473,5 +699,409 @@ describe("SessionOrchestrator", () => {
 
     expect(timerService.cancelPauseLimitExpiry).toHaveBeenCalledWith("session_1");
     expect(timerService.cancelWarningGraceExpiry).toHaveBeenCalledWith("session_1");
+  });
+
+  it("guards early against duplicate review requests while review is already pending", async () => {
+    const aggregate = createAggregate("review_pending");
+    const repository = {
+      withTransaction: vi.fn(async (callback) => callback({ tx: true })),
+      findSessionAggregateOrThrow: vi.fn(async () => aggregate),
+      saveSession: vi.fn(),
+      saveSessionEvent: vi.fn(),
+      createSessionBundle: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn()
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = { getContract: vi.fn() };
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await expect(orchestrator.requestReview("session_1")).rejects.toThrow(
+      "already has a review in progress"
+    );
+    expect(evaluateContractRules).not.toHaveBeenCalled();
+    expect(scoreSession).not.toHaveBeenCalled();
+  });
+
+  it("routes all avoidance follow-up actions through the orchestrator and notification boundary", async () => {
+    const aggregate = createAggregate("active_valid");
+    const assessment: AntiAvoidanceResult = {
+      patterns: [],
+      overallSeverity: "critical",
+      hasEscalationSignal: true,
+      recommendedResponses: ["raise_warning", "escalate_to_review", "flag_for_admin"]
+    };
+    const repository = {
+      withTransaction: vi
+        .fn()
+        .mockImplementationOnce(async (callback) => callback({ tx: "warning" }))
+        .mockImplementationOnce(async (callback) => callback({ tx: "review" })),
+      findSessionAggregateOrThrow: vi.fn(async () => aggregate),
+      saveSession: vi.fn(async (session) => {
+        aggregate.session = session;
+        return session;
+      }),
+      saveSessionEvent: vi.fn(async () => undefined),
+      createSessionBundle: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn(async () => undefined)
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = { getContract: vi.fn() };
+
+    vi.mocked(evaluateContractRules).mockReturnValue({
+      allRulesPassed: true,
+      hasCriticalViolation: false,
+      rules: [
+        {
+          code: "mandatory_artifacts_complete",
+          passed: true,
+          severity: "info",
+          message: "All mandatory artifacts required by the contract are present.",
+          details: {
+            missingArtifactTypes: [],
+            mandatoryFinalArtifactMissing: false
+          }
+        }
+      ],
+      criticalViolations: [],
+      warnings: [],
+      informational: []
+    } as ReturnType<typeof evaluateContractRules>);
+
+    vi.mocked(scoreSession).mockReturnValue({
+      ok: true,
+      result: {
+        outcome: "completed",
+        sessionScore: 91,
+        components: {
+          validTime: { raw: 100, weight: 0.35, weighted: 35 },
+          process: { raw: 90, weight: 0.2, weighted: 18 },
+          artifact: { raw: 100, weight: 0.25, weighted: 25 },
+          knowledge: { raw: 65, weight: 0.2, weighted: 13 }
+        },
+        hardFail: { triggered: false, reasons: [] },
+        decisionTrace: { decidedByHardFail: false }
+      }
+    } as ReturnType<typeof scoreSession>);
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await orchestrator.processAvoidanceAssessment("session_1", assessment);
+
+    expect(auditService.saveAntiAvoidanceResult).toHaveBeenCalledWith("session_1", assessment);
+    expect(timerService.scheduleWarningGraceExpiry).toHaveBeenCalledWith(
+      "session_1",
+      5,
+      expect.any(Function)
+    );
+    expect(notificationService.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "avoidance.flag_for_admin",
+        userId: "user_1",
+        sessionId: "session_1"
+      })
+    );
+    expect(repository.withTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  it("submits artifacts transactionally and derives isMandatory from contract terms", async () => {
+    const aggregate = createAggregate("active_valid");
+    const repository = {
+      withTransaction: vi.fn(async (callback) => callback({ tx: true })),
+      findSessionAggregateOrThrow: vi.fn(async () => aggregate),
+      saveSession: vi.fn(),
+      saveSessionEvent: vi.fn(async () => undefined),
+      createArtifact: vi.fn(async (artifact) => artifact),
+      createSessionBundle: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn(async () => undefined)
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = { getContract: vi.fn() };
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await orchestrator.submitArtifact("session_1", {
+      type: "final_submission",
+      title: "Final artifact",
+      source: "user_upload",
+      status: "submitted",
+      createdByUserId: "user_1"
+    });
+
+    expect(repository.withTransaction).toHaveBeenCalledTimes(1);
+    expect(repository.createArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session_1",
+        type: "final_submission",
+        isMandatory: true,
+        createdByUserId: "user_1"
+      }),
+      expect.anything()
+    );
+    expect(repository.saveSessionEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session_1",
+        type: "artifact_submitted",
+        state: "active_valid",
+        details: expect.objectContaining({
+          artifactType: "final_submission",
+          artifactStatus: "submitted"
+        })
+      }),
+      expect.anything()
+    );
+  });
+
+  it("creates checkpoints from the contract interval when creating a session", async () => {
+    const repository = {
+      withTransaction: vi.fn(async (callback) => callback({ tx: true })),
+      findSessionAggregateOrThrow: vi.fn(async (sessionId: string) => ({
+        ...createAggregate("planned"),
+        session: {
+          ...createAggregate("planned").session,
+          id: sessionId as Session["id"]
+        }
+      })),
+      createSessionBundle: vi.fn(async (session, checkpoints, initialEvents) => ({
+        session,
+        checkpoints,
+        initialEvents
+      })),
+      saveSession: vi.fn(),
+      saveSessionEvent: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn(async () => undefined)
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = {
+      getContract: vi.fn(async () => ({
+        ...createAggregate("planned").contract,
+        terms: {
+          ...createAggregate("planned").contract.terms,
+          checkpointIntervalMinutes: 30
+        }
+      }))
+    };
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await orchestrator.createSession({
+      userId: "user_1",
+      profileId: "profile_1",
+      contractId: "contract_1",
+      title: "New session",
+      objective: "Test checkpoint creation",
+      plannedRange: {
+        startsAt: "2026-03-28T09:00:00.000Z",
+        endsAt: "2026-03-28T11:00:00.000Z"
+      },
+      finalArtifactRequired: true
+    });
+
+    expect(repository.createSessionBundle).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining([
+        expect.objectContaining({ order: 1, title: "Checkpoint 1" }),
+        expect.objectContaining({ order: 2, title: "Checkpoint 2" }),
+        expect.objectContaining({ order: 3, title: "Checkpoint 3" }),
+        expect.objectContaining({ order: 4, title: "Checkpoint 4" })
+      ]),
+      [expect.objectContaining({ type: "planned" })]
+    );
+  });
+
+  it("does not create checkpoints when the interval is missing or longer than the session", async () => {
+    const repository = {
+      withTransaction: vi.fn(async (callback) => callback({ tx: true })),
+      findSessionAggregateOrThrow: vi.fn(async (sessionId: string) => ({
+        ...createAggregate("planned"),
+        session: {
+          ...createAggregate("planned").session,
+          id: sessionId as Session["id"]
+        }
+      })),
+      createSessionBundle: vi.fn(async (session, checkpoints, initialEvents) => ({
+        session,
+        checkpoints,
+        initialEvents
+      })),
+      saveSession: vi.fn(),
+      saveSessionEvent: vi.fn(),
+      listSessionEvents: vi.fn(),
+      getLatestScoring: vi.fn()
+    };
+    const auditService = {
+      saveDomainEvents: vi.fn(async () => undefined),
+      saveContractEvaluation: vi.fn(async () => undefined),
+      saveScoringResult: vi.fn(async () => undefined),
+      saveAntiAvoidanceResult: vi.fn(async () => undefined)
+    };
+    const timerService = {
+      scheduleCheckpointDueChecks: vi.fn(),
+      scheduleSessionReview: vi.fn(),
+      schedulePeriodicAvoidanceCheck: vi.fn(),
+      schedulePauseLimitExpiry: vi.fn(),
+      scheduleWarningGraceExpiry: vi.fn(),
+      cancelPauseLimitExpiry: vi.fn(),
+      cancelWarningGraceExpiry: vi.fn(),
+      clearAllForSession: vi.fn()
+    };
+    const notificationService = { notify: vi.fn() };
+    const contractService = {
+      getContract: vi
+        .fn()
+        .mockResolvedValueOnce({
+          ...createAggregate("planned").contract,
+          terms: {
+            ...createAggregate("planned").contract.terms,
+            checkpointIntervalMinutes: undefined
+          }
+        })
+        .mockResolvedValueOnce({
+          ...createAggregate("planned").contract,
+          terms: {
+            ...createAggregate("planned").contract.terms,
+            checkpointIntervalMinutes: 180
+          }
+        })
+    };
+
+    const orchestrator = new SessionOrchestrator(
+      repository as never,
+      auditService as never,
+      timerService as never,
+      notificationService as never,
+      contractService as never
+    );
+
+    await orchestrator.createSession({
+      userId: "user_1",
+      profileId: "profile_1",
+      contractId: "contract_1",
+      title: "No checkpoints",
+      objective: "Missing interval",
+      plannedRange: {
+        startsAt: "2026-03-28T09:00:00.000Z",
+        endsAt: "2026-03-28T11:00:00.000Z"
+      },
+      finalArtifactRequired: true
+    });
+
+    await orchestrator.createSession({
+      userId: "user_1",
+      profileId: "profile_1",
+      contractId: "contract_1",
+      title: "Long interval",
+      objective: "Interval longer than session",
+      plannedRange: {
+        startsAt: "2026-03-28T09:00:00.000Z",
+        endsAt: "2026-03-28T11:00:00.000Z"
+      },
+      finalArtifactRequired: true
+    });
+
+    expect(repository.createSessionBundle).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      [],
+      [expect.objectContaining({ type: "planned" })]
+    );
+    expect(repository.createSessionBundle).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      [],
+      [expect.objectContaining({ type: "planned" })]
+    );
   });
 });

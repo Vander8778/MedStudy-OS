@@ -6,6 +6,7 @@ import type {
   Penalty,
   ScoringResult,
   Session,
+  SessionBlock,
   SessionEvent,
   VivaAttempt
 } from "@medstudy/domain";
@@ -16,6 +17,7 @@ import { fromDate, parseJson, serializeJson, toDate } from "../../common/backend
 export type SessionAggregate = {
   session: Session;
   contract: Contract;
+  blocks: readonly SessionBlock[];
   artifacts: readonly Artifact[];
   checkpoints: readonly Checkpoint[];
   vivaAttempts: readonly VivaAttempt[];
@@ -268,6 +270,7 @@ export class SessionRepository {
       where: { id: sessionId },
       include: {
         contract: true,
+        blocks: true,
         artifacts: true,
         checkpoints: true,
         vivaAttempts: true,
@@ -303,7 +306,7 @@ export class SessionRepository {
         warningCount: record.warningCount,
         missedCheckpointCount: record.missedCheckpointCount,
         finalArtifactRequired: record.finalArtifactRequired,
-        blockIds: [],
+        blockIds: record.blocks.map((block) => block.id as Session["blockIds"][number]),
         checkpointIds: record.checkpoints.map((checkpoint) => checkpoint.id as Session["checkpointIds"][number]),
         artifactIds: record.artifacts.map((artifact) => artifact.id as Session["artifactIds"][number]),
         evaluationIds: [],
@@ -346,6 +349,20 @@ export class SessionRepository {
         createdAt: record.contract.createdAt.toISOString() as Contract["createdAt"],
         updatedAt: record.contract.updatedAt.toISOString() as Contract["updatedAt"]
       },
+      blocks: record.blocks.map((block) => ({
+        id: block.id as SessionBlock["id"],
+        sessionId: block.sessionId as SessionBlock["sessionId"],
+        type: block.type as SessionBlock["type"],
+        range: {
+          startsAt: block.rangeStartsAt.toISOString() as SessionBlock["range"]["startsAt"],
+          endsAt: block.rangeEndsAt.toISOString() as SessionBlock["range"]["endsAt"]
+        },
+        sourceEventId: block.sourceEventId as SessionBlock["sourceEventId"],
+        creditedMinutes: block.creditedMinutes as SessionBlock["creditedMinutes"],
+        notes: block.notes ?? undefined,
+        createdAt: block.createdAt.toISOString() as SessionBlock["createdAt"],
+        updatedAt: block.updatedAt.toISOString() as SessionBlock["updatedAt"]
+      })),
       artifacts: record.artifacts.map((artifact) => ({
         id: artifact.id as Artifact["id"],
         sessionId: artifact.sessionId as Artifact["sessionId"],

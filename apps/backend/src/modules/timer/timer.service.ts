@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import type { Checkpoint } from "@medstudy/domain";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -6,6 +6,7 @@ type TimerCallback = (sessionId: string) => Promise<void>;
 
 @Injectable()
 export class TimerService {
+  private readonly logger = new Logger(TimerService.name);
   private readonly scheduledTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(private readonly prisma: PrismaService) {}
@@ -47,7 +48,16 @@ export class TimerService {
     this.clearTimer(sessionId, name);
 
     const handle = setTimeout(() => {
-      void this.runWithFreshSession(sessionId, callback);
+      void this.runWithFreshSession(sessionId, callback).catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : "Unknown timer callback failure.";
+        const stack = error instanceof Error ? error.stack : undefined;
+
+        this.logger.error(
+          `Timer callback failed for session ${sessionId} (${name}): ${message}`,
+          stack
+        );
+      });
     }, Math.max(delayMs, 0));
 
     this.scheduledTimers.set(this.getTimerKey(sessionId, name), handle);
