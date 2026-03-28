@@ -111,6 +111,9 @@ export function validateContractTerms(
   }
 
   if (input.terms.checkpointIntervalMinutes !== undefined) {
+    // No upper-bound check against activeRange duration by design:
+    // an interval longer than the session window is still a coherent contract
+    // and simply implies that no interval-driven checkpoint would become due.
     if (
       !isFiniteNumber(input.terms.checkpointIntervalMinutes) ||
       input.terms.checkpointIntervalMinutes <= 0

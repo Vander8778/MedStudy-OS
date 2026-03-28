@@ -212,6 +212,19 @@ describe("validateContractTerms", () => {
     );
   });
 
+  it("accepts checkpointIntervalMinutes when it exceeds the active range duration", () => {
+    expect(
+      validateContractTerms(
+        createValidationInput({
+          terms: {
+            ...createValidationInput().terms,
+            checkpointIntervalMinutes: 240
+          }
+        })
+      )
+    ).toEqual({ valid: true });
+  });
+
   it("returns multiple simultaneous validation issues together", () => {
     const result = validateContractTerms({
       terms: {

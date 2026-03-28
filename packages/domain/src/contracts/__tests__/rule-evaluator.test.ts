@@ -91,6 +91,22 @@ describe("evaluateContractRules", () => {
     });
   });
 
+  it("passes when missedCheckpointCount equals the contract limit exactly", () => {
+    const result = evaluateContractRules(
+      createRuleInput({
+        session: {
+          ...createRuleInput().session,
+          missedCheckpointCount: 1
+        }
+      })
+    );
+
+    expect(getRuleByCode(result, "checkpoints_within_limit")).toMatchObject({
+      passed: true,
+      severity: "info"
+    });
+  });
+
   it("fails when mandatory artifact types are missing", () => {
     const result = evaluateContractRules(
       createRuleInput({
@@ -149,6 +165,26 @@ describe("evaluateContractRules", () => {
     expect(getRuleByCode(result, "viva_passed")).toMatchObject({
       passed: true,
       severity: "info"
+    });
+  });
+
+  it("passes when vivaScore equals vivaPassingScore exactly", () => {
+    const result = evaluateContractRules(
+      createRuleInput({
+        signals: {
+          ...createRuleInput().signals,
+          vivaScore: 70
+        }
+      })
+    );
+
+    expect(getRuleByCode(result, "viva_passed")).toMatchObject({
+      passed: true,
+      severity: "info",
+      details: {
+        vivaScore: 70,
+        requiredPassingScore: 70
+      }
     });
   });
 
@@ -219,6 +255,26 @@ describe("evaluateContractRules", () => {
     expect(getRuleByCode(result, "pause_exceeded")).toMatchObject({
       passed: false,
       severity: "warning"
+    });
+  });
+
+  it("passes when totalPauseMinutes equals maxPauseMinutes exactly", () => {
+    const result = evaluateContractRules(
+      createRuleInput({
+        session: {
+          ...createRuleInput().session,
+          totalPauseMinutes: 20
+        }
+      })
+    );
+
+    expect(getRuleByCode(result, "pause_within_limit")).toMatchObject({
+      passed: true,
+      severity: "info",
+      details: {
+        totalPauseMinutes: 20,
+        maxPauseMinutes: 20
+      }
     });
   });
 

@@ -2,6 +2,9 @@ export type ContractValidationInput = {
   terms: {
     minValidMinutes: number;
     maxMissedCheckpoints: number;
+    // Artifact-type membership is enforced upstream by the shared contracts/schema layer.
+    // M4 validates contract-rule semantics on already-shaped inputs and only checks for
+    // issues that remain meaningful at this layer, such as accidental empty strings.
     mandatoryArtifactTypes: readonly string[];
     vivaPassingScore: number;
     checkpointIntervalMinutes?: number;
@@ -44,6 +47,10 @@ export type ContractRuleEvaluationInput = {
     submittedArtifactTypes: readonly string[];
   };
   signals: {
+    // This mirrors the orchestrator-assembled hard-fail signal consumed by M3.
+    // The duplication is intentional: the orchestrator computes this signal once,
+    // then passes the same semantic fact into both M3 and M4 so each pure module
+    // can evaluate its own responsibilities without importing the other.
     mandatoryFinalArtifactMissing: boolean;
     vivaScore?: number;
     vivaRequired: boolean;
