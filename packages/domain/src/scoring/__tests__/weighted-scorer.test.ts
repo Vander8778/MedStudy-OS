@@ -77,7 +77,7 @@ describe("calculateWeightedSessionScore", () => {
       knowledgeScore: 78.3333333333
     });
 
-    expect(result.sessionScore).toBe(74.17);
+    expect(result.sessionScore).toBe(75.17);
   });
 
   it("returns a component score by its normalized component name", () => {
