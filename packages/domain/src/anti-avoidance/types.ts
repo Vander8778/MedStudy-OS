@@ -1,3 +1,5 @@
+import type { SessionState } from "@medstudy/contracts";
+
 export type AvoidanceThresholds = {
   idleStretchWarningMinutes: number;
   idleStretchCriticalMinutes: number;
@@ -13,7 +15,7 @@ export type AvoidanceThresholds = {
 
 export type AntiAvoidanceInput = {
   session: {
-    state: string;
+    state: SessionState;
     plannedDurationMinutes: number;
     elapsedMinutes: number;
     validMinutes: number;

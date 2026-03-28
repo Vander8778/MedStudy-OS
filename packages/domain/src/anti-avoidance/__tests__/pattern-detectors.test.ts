@@ -364,6 +364,23 @@ describe("detectArmingAvoidance", () => {
     });
   });
 
+  it("returns moderate for repeated cancels below the escalation threshold", () => {
+    expect(
+      detectArmingAvoidance(
+        createInput({
+          history: {
+            ...createInput().history,
+            armingAttemptCount: 3,
+            armingCancelCount: 2
+          }
+        })
+      )
+    ).toMatchObject({
+      detected: true,
+      severity: "moderate"
+    });
+  });
+
   it("returns high at the escalation threshold", () => {
     expect(
       detectArmingAvoidance(
@@ -385,6 +402,23 @@ describe("detectArmingAvoidance", () => {
 describe("detectActiveWarningEscalation", () => {
   it("returns none when no warning is active", () => {
     expect(detectActiveWarningEscalation(createInput())).toMatchObject({
+      detected: false,
+      severity: "none"
+    });
+  });
+
+  it("returns none when a warning is active but still below the escalation threshold", () => {
+    expect(
+      detectActiveWarningEscalation(
+        createInput({
+          session: {
+            ...createInput().session,
+            currentWarningActive: true,
+            currentWarningDurationMinutes: 4
+          }
+        })
+      )
+    ).toMatchObject({
       detected: false,
       severity: "none"
     });

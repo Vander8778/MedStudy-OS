@@ -86,6 +86,22 @@ describe("analyzeAvoidance", () => {
     expect(result.recommendedResponses).toEqual(["nudge_user"]);
   });
 
+  it("returns raise_warning for a moderate pattern that maps to warning escalation", () => {
+    const result = analyzeAvoidance(
+      createInput({
+        behavior: {
+          ...createInput().behavior,
+          nonStudyContextDetected: true,
+          nonStudyContextMinutes: 3
+        }
+      })
+    );
+
+    expect(result.overallSeverity).toBe("moderate");
+    expect(result.hasEscalationSignal).toBe(false);
+    expect(result.recommendedResponses).toEqual(["raise_warning"]);
+  });
+
   it("sets escalation to true for a high signal", () => {
     const result = analyzeAvoidance(
       createInput({
@@ -169,6 +185,29 @@ describe("analyzeAvoidance", () => {
     );
 
     expect(result.recommendedResponses).toEqual(["nudge_user"]);
+  });
+
+  it("preserves mixed-severity responses while still deduplicating duplicates", () => {
+    const result = analyzeAvoidance(
+      createInput({
+        behavior: {
+          ...createInput().behavior,
+          contextSwitchCount: 4,
+          nonStudyContextDetected: true,
+          nonStudyContextMinutes: 3
+        },
+        history: {
+          ...createInput().history,
+          armingCancelCount: 3
+        }
+      })
+    );
+
+    expect(result.recommendedResponses).toEqual([
+      "nudge_user",
+      "raise_warning",
+      "escalate_to_review"
+    ]);
   });
 
   it("returns all evaluated patterns in the patterns array", () => {

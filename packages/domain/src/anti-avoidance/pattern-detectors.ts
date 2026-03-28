@@ -343,6 +343,9 @@ export function detectArmingAvoidance(
   const { armingAttemptCount, armingCancelCount } = input.history;
   const { armingCancelEscalationCount } = input.thresholds;
 
+  // The high-severity branch is intentionally threshold-driven so callers can tune escalation.
+  // If armingCancelEscalationCount is configured at 2 or below, the moderate branch becomes
+  // unreachable by design because that configuration explicitly promotes earlier escalation.
   if (armingCancelCount >= armingCancelEscalationCount) {
     return buildDetectedResult(
       "arming_avoidance",
@@ -404,6 +407,8 @@ export function detectActiveWarningEscalation(
     );
   }
 
+  // MVP choice: unresolved warning duration reuses the idle-stretch thresholds.
+  // This keeps M5 thresholding compact until warning-specific duration thresholds are introduced.
   if (currentWarningDurationMinutes >= idleStretchCriticalMinutes) {
     return buildDetectedResult(
       "active_warning_escalation",
