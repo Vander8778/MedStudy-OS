@@ -33,7 +33,9 @@ function getPatternResponses(
     case "moderate":
       // Explicit raise-warning patterns: non-study exposure, repeated warning cycling,
       // and stalled starts. The remaining current M5 patterns at moderate severity
-      // are focus_instability and arming_avoidance, which intentionally map to nudge_user.
+      // are prolonged_idle, focus_instability, and arming_avoidance, which intentionally
+      // map to nudge_user because they are treated as more ambiguous than direct non-study
+      // exposure or explicit warning-cycle escalation in the MVP policy.
       switch (pattern) {
         case "non_study_context":
         case "repeated_warning_cycles":

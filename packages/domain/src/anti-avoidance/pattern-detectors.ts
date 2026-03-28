@@ -212,6 +212,9 @@ export function detectRepeatedWarningCycles(
 
   if (
     warningEscalationCount >= warningCycleEscalationCount ||
+    // warningCount uses a +1 offset so we only mark the pattern as high once the raw
+    // warning count has clearly moved beyond the configured cycle threshold, rather
+    // than merely touching it without an observed escalation event.
     warningCount >= warningCycleEscalationCount + 1
   ) {
     return buildDetectedResult(

@@ -86,6 +86,21 @@ describe("analyzeAvoidance", () => {
     expect(result.recommendedResponses).toEqual(["nudge_user"]);
   });
 
+  it("keeps moderate prolonged idle on the nudge_user path", () => {
+    const result = analyzeAvoidance(
+      createInput({
+        behavior: {
+          ...createInput().behavior,
+          longestIdleStretchMinutes: 5
+        }
+      })
+    );
+
+    expect(result.overallSeverity).toBe("moderate");
+    expect(result.hasEscalationSignal).toBe(false);
+    expect(result.recommendedResponses).toEqual(["nudge_user"]);
+  });
+
   it("returns raise_warning for a moderate pattern that maps to warning escalation", () => {
     const result = analyzeAvoidance(
       createInput({
@@ -155,7 +170,17 @@ describe("analyzeAvoidance", () => {
       })
     );
 
-    expect(result.patterns.filter((pattern) => pattern.detected)).toHaveLength(5);
+    expect(
+      result.patterns
+        .filter((pattern) => pattern.detected)
+        .map((pattern) => pattern.pattern)
+    ).toEqual([
+      "prolonged_idle",
+      "non_study_context",
+      "focus_instability",
+      "arming_avoidance",
+      "active_warning_escalation"
+    ]);
   });
 
   it("uses the maximum detected severity as overallSeverity", () => {

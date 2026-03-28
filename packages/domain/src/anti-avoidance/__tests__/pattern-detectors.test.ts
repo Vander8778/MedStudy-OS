@@ -80,6 +80,23 @@ describe("detectProlongedIdle", () => {
     });
   });
 
+  it("does not trigger low severity for normal input activity with positive idle minutes", () => {
+    expect(
+      detectProlongedIdle(
+        createInput({
+          behavior: {
+            ...createInput().behavior,
+            idleMinutes: 2,
+            inputActivityLevel: "normal"
+          }
+        })
+      )
+    ).toMatchObject({
+      detected: false,
+      severity: "none"
+    });
+  });
+
   it("returns moderate at the warning boundary", () => {
     expect(
       detectProlongedIdle(
@@ -109,6 +126,34 @@ describe("detectProlongedIdle", () => {
     ).toMatchObject({
       detected: true,
       severity: "critical"
+    });
+  });
+
+  it("does not change the result when only idleTotalWarningMinutes changes", () => {
+    const baseInput = createInput({
+      behavior: {
+        ...createInput().behavior,
+        idleMinutes: 2,
+        inputActivityLevel: "minimal"
+      }
+    });
+
+    expect(detectProlongedIdle(baseInput)).toMatchObject({
+      detected: true,
+      severity: "low"
+    });
+
+    expect(
+      detectProlongedIdle({
+        ...baseInput,
+        thresholds: {
+          ...baseInput.thresholds,
+          idleTotalWarningMinutes: 999
+        }
+      })
+    ).toMatchObject({
+      detected: true,
+      severity: "low"
     });
   });
 });
@@ -310,6 +355,24 @@ describe("detectStalledSessionStart", () => {
     });
   });
 
+  it("does not trigger in terminal or outcome-decided states", () => {
+    expect(
+      detectStalledSessionStart(
+        createInput({
+          session: {
+            ...createInput().session,
+            state: "completed",
+            elapsedMinutes: 20,
+            validMinutes: 0
+          }
+        })
+      )
+    ).toMatchObject({
+      detected: false,
+      severity: "none"
+    });
+  });
+
   it("triggers after the threshold with zero valid minutes", () => {
     expect(
       detectStalledSessionStart(
@@ -348,6 +411,22 @@ describe("detectStalledSessionStart", () => {
 });
 
 describe("detectArmingAvoidance", () => {
+  it("returns none when there are no arming cancels", () => {
+    expect(
+      detectArmingAvoidance(
+        createInput({
+          history: {
+            ...createInput().history,
+            armingCancelCount: 0
+          }
+        })
+      )
+    ).toMatchObject({
+      detected: false,
+      severity: "none"
+    });
+  });
+
   it("returns low below the escalation threshold", () => {
     expect(
       detectArmingAvoidance(

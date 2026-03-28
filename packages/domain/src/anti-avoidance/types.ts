@@ -3,6 +3,8 @@ import type { SessionState } from "@medstudy/contracts";
 export type AvoidanceThresholds = {
   idleStretchWarningMinutes: number;
   idleStretchCriticalMinutes: number;
+  // Reserved for future cumulative-idle pattern handling. M5 currently evaluates
+  // prolonged idle primarily through longest idle stretch plus low-input behavior.
   idleTotalWarningMinutes: number;
   contextSwitchWarningCount: number;
   contextSwitchCriticalCount: number;
@@ -38,6 +40,8 @@ export type AntiAvoidanceInput = {
     warningEscalationCount: number;
     armingAttemptCount: number;
     armingCancelCount: number;
+    // Reserved for future cross-session escalation. M5 currently evaluates only
+    // the current normalized snapshot and same-session history signals.
     previousSessionAvoidanceCount: number;
   };
   thresholds: AvoidanceThresholds;
