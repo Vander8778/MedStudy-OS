@@ -1,0 +1,271 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String     @id
+  email          String     @unique
+  role           String
+  status         String
+  displayName    String?
+  createdAt      DateTime
+  updatedAt      DateTime
+  profiles       Profile[]
+  contracts      Contract[]
+  sessions       Session[]
+}
+
+model Profile {
+  id          String   @id
+  userId      String
+  studyStage  String
+  timezone    String?
+  createdAt   DateTime
+  updatedAt   DateTime
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    Session[]
+}
+
+model Contract {
+  id                         String   @id
+  userId                     String
+  name                       String
+  description                String?
+  status                     String
+  minValidMinutes            Float
+  maxMissedCheckpoints       Int
+  mandatoryArtifactTypesJson String
+  vivaPassingScore           Float
+  checkpointIntervalMinutes  Float?
+  maxPauseMinutes            Float?
+  activeRangeStartsAt        DateTime
+  activeRangeEndsAt          DateTime
+  signedAt                   DateTime?
+  activatedAt                DateTime?
+  endedAt                    DateTime?
+  tagsJson                   String
+  metadataJson               String?
+  createdAt                  DateTime
+  updatedAt                  DateTime
+  user                       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions                   Session[]
+}
+
+model Session {
+  id                    String    @id
+  userId                String
+  profileId             String
+  contractId            String
+  title                 String
+  objective             String
+  state                 String
+  plannedRangeStartsAt  DateTime
+  plannedRangeEndsAt    DateTime
+  startedAt             DateTime?
+  endedAt               DateTime?
+  reviewRequestedAt     DateTime?
+  validMinutes          Float
+  invalidMinutes        Float
+  warningCount          Int
+  missedCheckpointCount Int
+  finalArtifactRequired Boolean
+  notes                 String?
+  metadataJson          String?
+  createdAt             DateTime
+  updatedAt             DateTime
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile               Profile                    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  contract              Contract                   @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  blocks                SessionBlock[]
+  events                SessionEvent[]
+  checkpoints           Checkpoint[]
+  artifacts             Artifact[]
+  evaluations           Evaluation[]
+  vivaAttempts          VivaAttempt[]
+  penalties             Penalty[]
+  telemetryEvents       TelemetryEvent[]
+  domainEvents          DomainEvent[]
+  scoringResults        ScoringResult[]
+  contractEvaluations   ContractEvaluationResult[]
+  antiAvoidanceResults  AntiAvoidanceResult[]
+}
+
+model SessionBlock {
+  id              String   @id
+  sessionId       String
+  type            String
+  rangeStartsAt   DateTime
+  rangeEndsAt     DateTime
+  sourceEventId   String?
+  creditedMinutes Float
+  notes           String?
+  createdAt       DateTime
+  updatedAt       DateTime
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SessionEvent {
+  id         String   @id
+  sessionId  String
+  type       String
+  actorType  String
+  actorUserId String?
+  actorLabel String?
+  state      String?
+  occurredAt DateTime
+  detailsJson String?
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Checkpoint {
+  id           String   @id
+  sessionId    String
+  orderIndex   Int
+  title        String
+  status       String
+  dueAt        DateTime
+  completedAt  DateTime?
+  artifactId   String?
+  evaluationId String?
+  notes        String?
+  createdAt    DateTime
+  updatedAt    DateTime
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Artifact {
+  id              String   @id
+  sessionId       String
+  type            String
+  source          String
+  status          String
+  title           String
+  description     String?
+  isMandatory     Boolean
+  createdByUserId String?
+  submittedAt     DateTime?
+  mediaType       String?
+  uri             String?
+  metadataJson    String?
+  createdAt       DateTime
+  updatedAt       DateTime
+  session         Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Evaluation {
+  id                 String   @id
+  sessionId          String
+  type               String
+  status             String
+  evaluator          String
+  artifactId         String?
+  checkpointId       String?
+  vivaAttemptId      String?
+  evaluatedAt        DateTime?
+  score              Float?
+  notes              String?
+  evidenceArtifactIdsJson String
+  createdAt          DateTime
+  updatedAt          DateTime
+  session            Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model VivaAttempt {
+  id                  String   @id
+  sessionId           String
+  promptTemplateId    String?
+  status              String
+  scheduledAt         DateTime?
+  startedAt           DateTime?
+  completedAt         DateTime?
+  transcriptArtifactId String?
+  evaluationId        String?
+  score               Float?
+  passingScore        Float?
+  notes               String?
+  createdAt           DateTime
+  updatedAt           DateTime
+  session             Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Penalty {
+  id           String   @id
+  userId       String
+  contractId   String?
+  sessionId    String?
+  type         String
+  reason       String
+  status       String
+  issuedAt     DateTime
+  expiresAt    DateTime?
+  resolvedAt   DateTime?
+  notes        String?
+  metadataJson String?
+  createdAt    DateTime
+  updatedAt    DateTime
+  session      Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+}
+
+model TelemetryEvent {
+  id          String   @id
+  userId      String
+  sessionId   String?
+  source      String
+  type        String
+  occurredAt  DateTime
+  receivedAt  DateTime
+  payloadJson String
+  createdAt   DateTime
+  session     Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model DomainEvent {
+  id          String   @id
+  sessionId   String?
+  type        String
+  occurredAt  DateTime
+  payloadJson String
+  createdAt   DateTime
+  session     Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model ScoringResult {
+  id                  String   @id
+  sessionId           String
+  outcome             String
+  sessionScore        Float
+  componentsJson      String
+  hardFailJson        String
+  decisionTraceJson   String
+  createdAt           DateTime
+  session             Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model ContractEvaluationResult {
+  id                   String   @id
+  sessionId            String
+  allRulesPassed       Boolean
+  hasCriticalViolation Boolean
+  rulesJson            String
+  criticalViolationsJson String
+  warningsJson         String
+  informationalJson    String
+  createdAt            DateTime
+  session              Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AntiAvoidanceResult {
+  id                  String   @id
+  sessionId           String
+  overallSeverity     String
+  hasEscalationSignal Boolean
+  patternsJson        String
+  recommendedResponsesJson String
+  createdAt           DateTime
+  session             Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
