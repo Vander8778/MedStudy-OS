@@ -476,6 +476,7 @@ export class SessionOrchestrator {
   ) {
     return this.sessionRepository.withTransaction(async (db) => {
       const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId, db);
+      const fromState = aggregate.session.state;
       const result = this.assertTransitionSucceeded(
         transition(
           aggregate.session,
@@ -492,11 +493,11 @@ export class SessionOrchestrator {
       );
       await this.auditService.saveDomainEvents(result.domainEvents, db);
 
-      if (aggregate.session.state === "active_warning" && result.toState !== "active_warning") {
+      if (fromState === "active_warning" && result.toState !== "active_warning") {
         this.timerService.cancelWarningGraceExpiry(sessionId);
       }
 
-      if (aggregate.session.state === "paused_valid" && result.toState !== "paused_valid") {
+      if (fromState === "paused_valid" && result.toState !== "paused_valid") {
         this.timerService.cancelPauseLimitExpiry(sessionId);
       }
 
