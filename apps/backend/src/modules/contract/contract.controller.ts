@@ -1,17 +1,26 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
-import { ContractService, type CreateContractCommand } from "./contract.service";
+import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
+import type { CreateContractRequest } from "@medstudy/contracts";
+import { mapContractResponse } from "../../common/view-mappers";
+import { ZodValidationPipe } from "../../common/zod-validation.pipe";
+import { createContractRequestSchema } from "./dto/create-contract.dto";
+import { ContractService } from "./contract.service";
 
 @Controller("contracts")
 export class ContractController {
-  constructor(private readonly contractService: ContractService) {}
+  constructor(
+    @Inject(ContractService)
+    private readonly contractService: ContractService
+  ) {}
 
   @Post()
-  createContract(@Body() body: CreateContractCommand) {
-    return this.contractService.createContract(body);
+  async createContract(
+    @Body(new ZodValidationPipe(createContractRequestSchema)) body: CreateContractRequest
+  ) {
+    return mapContractResponse(await this.contractService.createContract(body));
   }
 
   @Get(":id")
-  getContract(@Param("id") id: string) {
-    return this.contractService.getContract(id);
+  async getContract(@Param("id") id: string) {
+    return mapContractResponse(await this.contractService.getContract(id));
   }
 }

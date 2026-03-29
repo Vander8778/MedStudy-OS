@@ -1,95 +1,138 @@
-import { Body, Controller, Get, Param, Post } from "@nestjs/common";
-import type { Artifact } from "@medstudy/domain";
-import { SessionOrchestrator, type CreateSessionCommand, type SessionActionActor } from "./session.orchestrator";
-
-type PauseResumeBody = {
-  actor?: SessionActionActor;
-  reason?: "warning_resolved" | "pause_within_limit" | "manual_clear" | "admin_clear";
-};
+import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
+import type {
+  CreateSessionRequest,
+  RequestReviewRequest,
+  ResumeSessionRequest,
+  SessionActionRequest,
+  SubmitArtifactRequest
+} from "@medstudy/contracts";
+import {
+  mapGetEventsResponse,
+  mapGetScoringResponse,
+  mapGetSessionResponse,
+  mapReviewResultResponse,
+  mapSessionAggregateResponse,
+  mapSessionMutationResponse,
+  mapSubmitArtifactResponse
+} from "../../common/view-mappers";
+import { ZodValidationPipe } from "../../common/zod-validation.pipe";
+import { requestReviewRequestSchema } from "./dto/request-review.dto";
+import { createSessionRequestSchema } from "./dto/create-session.dto";
+import { resumeSessionRequestSchema } from "./dto/resume-session.dto";
+import { sessionActionRequestSchema } from "./dto/session-action.dto";
+import { submitArtifactRequestSchema } from "./dto/submit-artifact.dto";
+import { SessionOrchestrator } from "./session.orchestrator";
 
 @Controller("sessions")
 export class SessionController {
-  constructor(private readonly sessionOrchestrator: SessionOrchestrator) {}
+  constructor(
+    @Inject(SessionOrchestrator)
+    private readonly sessionOrchestrator: SessionOrchestrator
+  ) {}
 
   @Post()
-  createSession(@Body() body: CreateSessionCommand) {
-    return this.sessionOrchestrator.createSession(body);
+  async createSession(
+    @Body(new ZodValidationPipe(createSessionRequestSchema)) body: CreateSessionRequest
+  ) {
+    return mapSessionAggregateResponse(await this.sessionOrchestrator.createSession(body));
   }
 
   @Get(":id")
-  getSession(@Param("id") id: string) {
-    return this.sessionOrchestrator.getSession(id);
+  async getSession(@Param("id") id: string) {
+    return mapGetSessionResponse(await this.sessionOrchestrator.getSession(id));
   }
 
   @Post(":id/arm")
-  armSession(@Param("id") id: string, @Body() body: { actor?: SessionActionActor }) {
-    return this.sessionOrchestrator.armSession(id, body.actor);
+  async armSession(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
+  ) {
+    return mapSessionMutationResponse(await this.sessionOrchestrator.armSession(id, body.actor));
   }
 
   @Post(":id/confirm-arm")
-  confirmArmSession(@Param("id") id: string, @Body() body: { actor?: SessionActionActor }) {
-    return this.sessionOrchestrator.confirmArmSession(id, body.actor);
+  async confirmArmSession(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
+  ) {
+    return mapSessionMutationResponse(
+      await this.sessionOrchestrator.confirmArmSession(id, body.actor)
+    );
   }
 
   @Post(":id/start")
-  startSession(@Param("id") id: string, @Body() body: { actor?: SessionActionActor }) {
-    return this.sessionOrchestrator.startSession(id, body.actor);
+  async startSession(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
+  ) {
+    return mapSessionMutationResponse(
+      await this.sessionOrchestrator.startSession(id, body.actor)
+    );
   }
 
   @Post(":id/pause")
-  pauseSession(@Param("id") id: string, @Body() body: PauseResumeBody) {
-    return this.sessionOrchestrator.pauseSession(id, body.actor);
+  async pauseSession(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
+  ) {
+    return mapSessionMutationResponse(
+      await this.sessionOrchestrator.pauseSession(id, body.actor)
+    );
   }
 
   @Post(":id/resume")
-  resumeSession(@Param("id") id: string, @Body() body: PauseResumeBody) {
-    return this.sessionOrchestrator.resumeSession(
-      id,
-      body.reason ?? "pause_within_limit",
-      body.actor
+  async resumeSession(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(resumeSessionRequestSchema)) body: ResumeSessionRequest
+  ) {
+    return mapSessionMutationResponse(
+      await this.sessionOrchestrator.resumeSession(id, body.reason, body.actor)
     );
   }
 
   @Post(":id/submit-artifact")
-  submitArtifact(
+  async submitArtifact(
     @Param("id") id: string,
-    @Body()
-    body: {
-      type: Artifact["type"];
-      title: string;
-      source: Artifact["source"];
-      status: Artifact["status"];
-      createdByUserId?: string;
-      description?: string;
-      uri?: string;
-      metadata?: Record<string, unknown>;
-    }
+    @Body(new ZodValidationPipe(submitArtifactRequestSchema)) body: SubmitArtifactRequest
   ) {
-    return this.sessionOrchestrator.submitArtifact(id, body);
+    return mapSubmitArtifactResponse(await this.sessionOrchestrator.submitArtifact(id, body));
   }
 
   @Post(":id/request-review")
-  requestReview(@Param("id") id: string, @Body() body: { actor?: SessionActionActor }) {
-    return this.sessionOrchestrator.requestReview(id, body);
+  async requestReview(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(requestReviewRequestSchema)) body: RequestReviewRequest
+  ) {
+    return mapReviewResultResponse(await this.sessionOrchestrator.requestReview(id, body));
   }
 
   @Post(":id/penalize")
-  penalize(@Param("id") id: string, @Body() body: { actor?: SessionActionActor }) {
-    return this.sessionOrchestrator.penalizeSession(id, body.actor);
+  async penalize(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
+  ) {
+    return mapSessionMutationResponse(
+      await this.sessionOrchestrator.penalizeSession(id, body.actor)
+    );
   }
 
   @Post(":id/excuse")
-  excuse(@Param("id") id: string, @Body() body: { actor?: SessionActionActor }) {
-    return this.sessionOrchestrator.excuseSession(id, body.actor);
+  async excuse(
+    @Param("id") id: string,
+    @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
+  ) {
+    return mapSessionMutationResponse(
+      await this.sessionOrchestrator.excuseSession(id, body.actor)
+    );
   }
 
   @Get(":id/scoring")
-  getScoring(@Param("id") id: string) {
-    return this.sessionOrchestrator.getSessionScoring(id);
+  async getScoring(@Param("id") id: string) {
+    return mapGetScoringResponse(await this.sessionOrchestrator.getSessionScoring(id));
   }
 
   @Get(":id/events")
-  getEvents(@Param("id") id: string) {
-    return this.sessionOrchestrator.getSessionEvents(id);
+  async getEvents(@Param("id") id: string) {
+    return mapGetEventsResponse(await this.sessionOrchestrator.getSessionEvents(id));
   }
 }

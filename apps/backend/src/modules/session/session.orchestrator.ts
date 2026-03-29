@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  Injectable
-} from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import {
   evaluateContractRules,
   isOutcomeDecided,
@@ -21,6 +18,12 @@ import {
   type TimeoutReason
 } from "@medstudy/domain";
 import { createId } from "../../common/backend-utils";
+import {
+  SessionAlreadyDecidedException,
+  SessionInvalidTransitionException,
+  SessionReviewInProgressException,
+  SessionScoringFailedException
+} from "../../common/exceptions";
 import { AuditService } from "../audit/audit.service";
 import { ContractService } from "../contract/contract.service";
 import { NotificationService } from "../notification/notification.service";
@@ -149,7 +152,7 @@ export class SessionOrchestrator {
 
   private assertTransitionSucceeded(result: ReturnType<typeof transition>) {
     if (!result.ok) {
-      throw new BadRequestException(result.reason);
+      throw new SessionInvalidTransitionException(result.reason);
     }
 
     return result;
@@ -656,15 +659,11 @@ export class SessionOrchestrator {
       const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId, db);
 
       if (aggregate.session.state === "review_pending") {
-        throw new BadRequestException(
-          `Session ${sessionId} already has a review in progress.`
-        );
+        throw new SessionReviewInProgressException(sessionId);
       }
 
       if (isOutcomeDecided(aggregate.session.state)) {
-        throw new BadRequestException(
-          `Session ${sessionId} already has a decided outcome (${aggregate.session.state}).`
-        );
+        throw new SessionAlreadyDecidedException(sessionId, aggregate.session.state);
       }
 
       const reviewEvent = this.createMachineEvent("review_requested", options.actor);
@@ -697,7 +696,7 @@ export class SessionOrchestrator {
       const scoringResult = scoreSession(scoringInput);
 
       if (!scoringResult.ok) {
-        throw new BadRequestException(scoringResult.reason);
+        throw new SessionScoringFailedException(scoringResult.reason);
       }
 
       const outcomeEventType = this.mapScoringOutcomeToMachineEvent(scoringResult.result.outcome);

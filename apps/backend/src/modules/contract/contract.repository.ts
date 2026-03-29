@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import type { Contract } from "@medstudy/domain";
+import { ContractNotFoundException } from "../../common/exceptions";
 import { PrismaService } from "../../prisma/prisma.service";
 import { fromDate, parseJson, serializeJson, toDate } from "../../common/backend-utils";
 
@@ -57,7 +58,7 @@ export class ContractRepository {
     const record = await this.prisma.contract.findUnique({ where: { id } });
 
     if (!record) {
-      throw new NotFoundException(`Contract ${id} was not found.`);
+      throw new ContractNotFoundException(id);
     }
 
     return {

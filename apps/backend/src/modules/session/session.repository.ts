@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import type {
   Artifact,
   Checkpoint,
@@ -11,6 +11,7 @@ import type {
   VivaAttempt
 } from "@medstudy/domain";
 import type { Prisma } from "@prisma/client";
+import { SessionNotFoundException } from "../../common/exceptions";
 import { PrismaService } from "../../prisma/prisma.service";
 import { fromDate, parseJson, serializeJson, toDate } from "../../common/backend-utils";
 
@@ -282,7 +283,7 @@ export class SessionRepository {
     });
 
     if (!record) {
-      throw new NotFoundException(`Session ${sessionId} was not found.`);
+      throw new SessionNotFoundException(sessionId);
     }
 
     return {

@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import { ApiErrorFilter } from "./common/api-error.filter";
 import { AppModule } from "./app.module";
 
 export async function bootstrap() {
@@ -8,6 +9,7 @@ export async function bootstrap() {
   });
 
   app.setGlobalPrefix("api");
+  app.useGlobalFilters(new ApiErrorFilter());
 
   await app.listen(3001);
   return app;

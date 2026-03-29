@@ -1,13 +1,21 @@
-import { Body, Controller, Post } from "@nestjs/common";
+import { Body, Controller, Inject, Post } from "@nestjs/common";
+import type { IngestTelemetryRequest } from "@medstudy/contracts";
+import { mapTelemetryIngestResponse } from "../../common/view-mappers";
+import { ZodValidationPipe } from "../../common/zod-validation.pipe";
+import { ingestTelemetryRequestSchema } from "./dto/ingest-telemetry.dto";
 import { TelemetryProcessor } from "./telemetry.processor";
-import type { CreateTelemetryEventCommand } from "./telemetry.repository";
 
 @Controller("telemetry")
 export class TelemetryController {
-  constructor(private readonly telemetryProcessor: TelemetryProcessor) {}
+  constructor(
+    @Inject(TelemetryProcessor)
+    private readonly telemetryProcessor: TelemetryProcessor
+  ) {}
 
   @Post("events")
-  ingestTelemetry(@Body() body: CreateTelemetryEventCommand) {
-    return this.telemetryProcessor.ingestEvent(body);
+  async ingestTelemetry(
+    @Body(new ZodValidationPipe(ingestTelemetryRequestSchema)) body: IngestTelemetryRequest
+  ) {
+    return mapTelemetryIngestResponse(await this.telemetryProcessor.ingestEvent(body));
   }
 }

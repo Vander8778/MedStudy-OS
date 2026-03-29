@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { validateContractTerms, type Contract } from "@medstudy/domain";
 import { createId } from "../../common/backend-utils";
+import { ContractInvalidTermsException } from "../../common/exceptions";
 import { ContractRepository } from "./contract.repository";
 
 export type CreateContractCommand = {
@@ -34,10 +35,7 @@ export class ContractService {
     });
 
     if (!validation.valid) {
-      throw new BadRequestException({
-        message: "Contract terms are invalid.",
-        issues: validation.issues
-      });
+      throw new ContractInvalidTermsException(validation.issues);
     }
 
     const now = new Date().toISOString();
