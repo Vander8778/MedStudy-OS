@@ -6,6 +6,8 @@ type TimerCallback = (sessionId: string) => Promise<void>;
 
 @Injectable()
 export class TimerService {
+  // MVP limitation: timers live only in-process via setTimeout. If the backend restarts,
+  // scheduled checkpoint/review/warning/pause callbacks are lost until a later durable scheduler exists.
   private readonly logger = new Logger(TimerService.name);
   private readonly scheduledTimers = new Map<string, ReturnType<typeof setTimeout>>();
 

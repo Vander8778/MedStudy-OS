@@ -137,7 +137,7 @@ export class SessionOrchestrator {
         return {
           ...base,
           type: "excused",
-          actorType: actor?.actorType ?? "admin"
+          actorType: actor?.actorType ?? "system"
         };
       default:
         return {
@@ -257,10 +257,26 @@ export class SessionOrchestrator {
     return {
       submittedArtifactTypes: this.getSubmittedArtifactTypes(aggregate),
       latestVivaScore: this.getLatestVivaScore(aggregate),
-      vivaRequired: aggregate.vivaAttempts.length > 0,
+      // Current contract terms always carry vivaPassingScore, so the backend treats viva as
+      // contract-required for every MVP contract even when no attempt has been recorded yet.
+      vivaRequired: true,
       vivaAttempted: aggregate.vivaAttempts.length > 0,
       totalPauseMinutes: this.getTotalPauseMinutes(aggregate)
     };
+  }
+
+  private buildResumeContext(reason: ResumeReason): SessionMachineContext {
+    switch (reason) {
+      case "warning_resolved":
+        return { warningResolvedInGraceWindow: true };
+      case "pause_within_limit":
+        return { pauseWithinLimit: true };
+      case "manual_clear":
+        return { invalidBlockCleared: true };
+      case "admin_clear":
+        // M2 currently uses the same invalid-block clearance guard for both manual and admin clears.
+        return { invalidBlockCleared: true };
+    }
   }
 
   private buildContractEvaluationInput(
@@ -554,33 +570,29 @@ export class SessionOrchestrator {
     );
   }
 
-  pauseSession(sessionId: string, actor?: SessionActionActor) {
+  async pauseSession(sessionId: string, actor?: SessionActionActor) {
+    const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId);
+
     return this.dispatchSessionMutation(
       sessionId,
       this.createMachineEvent("paused", actor),
       {
         actor,
         context: {
-          totalPauseDuration: 0 as SessionMachineContext["totalPauseDuration"]
+          totalPauseDuration:
+            this.getTotalPauseMinutes(aggregate) as SessionMachineContext["totalPauseDuration"]
         }
       }
     );
   }
 
-  resumeSession(sessionId: string, reason: "warning_resolved" | "pause_within_limit" | "manual_clear" | "admin_clear", actor?: SessionActionActor) {
-    const context: SessionMachineContext =
-      reason === "warning_resolved"
-        ? { warningResolvedInGraceWindow: true }
-        : reason === "pause_within_limit"
-          ? { pauseWithinLimit: true }
-          : { invalidBlockCleared: true };
-
+  resumeSession(sessionId: string, reason: ResumeReason, actor?: SessionActionActor) {
     return this.dispatchSessionMutation(
       sessionId,
       this.createMachineEvent("resumed", actor, reason),
       {
         actor,
-        context
+        context: this.buildResumeContext(reason)
       }
     );
   }
@@ -764,6 +776,9 @@ export class SessionOrchestrator {
     // MVP note: this flow is intentionally not a single cross-step transaction.
     // We persist the avoidance assessment first, then route follow-up actions through their
     // own orchestrated transactions so session lifecycle mutations still go through M2.
+    // That leaves a known race window if concurrent telemetry assessments try to raise a
+    // warning and request review at nearly the same time; this must be hardened before
+    // production so avoidance-driven actions can be serialized per session.
     await this.auditService.saveAntiAvoidanceResult(sessionId, assessment);
 
     if (assessment.recommendedResponses.includes("raise_warning")) {
