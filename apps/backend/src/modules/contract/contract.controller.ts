@@ -1,9 +1,14 @@
 import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
-import type { CreateContractRequest } from "@medstudy/contracts";
+import {
+  nonEmptyStringSchema,
+  type CreateContractRequest
+} from "@medstudy/contracts";
 import { mapContractResponse } from "../../common/view-mappers";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
 import { createContractRequestSchema } from "./dto/create-contract.dto";
 import { ContractService } from "./contract.service";
+
+const contractIdParamPipe = new ZodValidationPipe(nonEmptyStringSchema);
 
 @Controller("contracts")
 export class ContractController {
@@ -20,7 +25,7 @@ export class ContractController {
   }
 
   @Get(":id")
-  async getContract(@Param("id") id: string) {
+  async getContract(@Param("id", contractIdParamPipe) id: string) {
     return mapContractResponse(await this.contractService.getContract(id));
   }
 }

@@ -610,7 +610,9 @@ export class SessionOrchestrator {
     }
   ) {
     // Artifact submission is intentionally modeled as a persisted side-effect plus audit event.
-    // Checkpoint satisfaction stays outside this MVP and will be integrated later by orchestration.
+    // Late evidence submission from terminal states is allowed in the MVP; the submission is
+    // recorded without reopening or re-transitioning the session outcome. Checkpoint satisfaction
+    // stays outside this MVP and will be integrated later by orchestration.
     return this.sessionRepository.withTransaction(async (db) => {
       const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId, db);
       const now = new Date().toISOString();

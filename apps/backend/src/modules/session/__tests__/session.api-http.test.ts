@@ -323,6 +323,38 @@ describe("SessionController HTTP", () => {
     expect(response.body.contract.metadata).toBeUndefined();
   });
 
+  it("returns 422 validation.invalid_input for blank session route params", async () => {
+    const response = await request(app.getHttpServer()).get("/api/sessions/%20%20");
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe("validation.invalid_input");
+    expect(response.body.error.details.issues).toEqual([
+      expect.objectContaining({
+        path: ""
+      })
+    ]);
+    expect(orchestrator.getSession).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 validation.invalid_input for blank session ids on POST endpoints", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/api/sessions/%20%20/pause")
+      .send({
+        actor: {
+          actorType: "user"
+        }
+      });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe("validation.invalid_input");
+    expect(response.body.error.details.issues).toEqual([
+      expect.objectContaining({
+        path: ""
+      })
+    ]);
+    expect(orchestrator.pauseSession).not.toHaveBeenCalled();
+  });
+
   it("returns the enriched review result response from POST /api/sessions/:id/request-review", async () => {
     orchestrator.requestReview.mockResolvedValue({
       session: createSession("completed"),

@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Inject, Param, Post } from "@nestjs/common";
-import type {
-  CreateSessionRequest,
-  RequestReviewRequest,
-  ResumeSessionRequest,
-  SessionActionRequest,
-  SubmitArtifactRequest
+import {
+  nonEmptyStringSchema,
+  type CreateSessionRequest,
+  type RequestReviewRequest,
+  type ResumeSessionRequest,
+  type SessionActionRequest,
+  type SubmitArtifactRequest
 } from "@medstudy/contracts";
 import {
   mapGetEventsResponse,
@@ -23,6 +24,8 @@ import { sessionActionRequestSchema } from "./dto/session-action.dto";
 import { submitArtifactRequestSchema } from "./dto/submit-artifact.dto";
 import { SessionOrchestrator } from "./session.orchestrator";
 
+const sessionIdParamPipe = new ZodValidationPipe(nonEmptyStringSchema);
+
 @Controller("sessions")
 export class SessionController {
   constructor(
@@ -38,13 +41,13 @@ export class SessionController {
   }
 
   @Get(":id")
-  async getSession(@Param("id") id: string) {
+  async getSession(@Param("id", sessionIdParamPipe) id: string) {
     return mapGetSessionResponse(await this.sessionOrchestrator.getSession(id));
   }
 
   @Post(":id/arm")
   async armSession(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
   ) {
     return mapSessionMutationResponse(await this.sessionOrchestrator.armSession(id, body.actor));
@@ -52,7 +55,7 @@ export class SessionController {
 
   @Post(":id/confirm-arm")
   async confirmArmSession(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
   ) {
     return mapSessionMutationResponse(
@@ -62,7 +65,7 @@ export class SessionController {
 
   @Post(":id/start")
   async startSession(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
   ) {
     return mapSessionMutationResponse(
@@ -72,7 +75,7 @@ export class SessionController {
 
   @Post(":id/pause")
   async pauseSession(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
   ) {
     return mapSessionMutationResponse(
@@ -82,7 +85,7 @@ export class SessionController {
 
   @Post(":id/resume")
   async resumeSession(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(resumeSessionRequestSchema)) body: ResumeSessionRequest
   ) {
     return mapSessionMutationResponse(
@@ -92,7 +95,7 @@ export class SessionController {
 
   @Post(":id/submit-artifact")
   async submitArtifact(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(submitArtifactRequestSchema)) body: SubmitArtifactRequest
   ) {
     return mapSubmitArtifactResponse(await this.sessionOrchestrator.submitArtifact(id, body));
@@ -100,7 +103,7 @@ export class SessionController {
 
   @Post(":id/request-review")
   async requestReview(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(requestReviewRequestSchema)) body: RequestReviewRequest
   ) {
     return mapReviewResultResponse(await this.sessionOrchestrator.requestReview(id, body));
@@ -108,7 +111,7 @@ export class SessionController {
 
   @Post(":id/penalize")
   async penalize(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
   ) {
     return mapSessionMutationResponse(
@@ -118,7 +121,7 @@ export class SessionController {
 
   @Post(":id/excuse")
   async excuse(
-    @Param("id") id: string,
+    @Param("id", sessionIdParamPipe) id: string,
     @Body(new ZodValidationPipe(sessionActionRequestSchema)) body: SessionActionRequest
   ) {
     return mapSessionMutationResponse(
@@ -127,12 +130,12 @@ export class SessionController {
   }
 
   @Get(":id/scoring")
-  async getScoring(@Param("id") id: string) {
+  async getScoring(@Param("id", sessionIdParamPipe) id: string) {
     return mapGetScoringResponse(await this.sessionOrchestrator.getSessionScoring(id));
   }
 
   @Get(":id/events")
-  async getEvents(@Param("id") id: string) {
+  async getEvents(@Param("id", sessionIdParamPipe) id: string) {
     return mapGetEventsResponse(await this.sessionOrchestrator.getSessionEvents(id));
   }
 }

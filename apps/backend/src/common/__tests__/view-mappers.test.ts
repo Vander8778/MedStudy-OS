@@ -146,6 +146,9 @@ describe("view mappers", () => {
     });
 
     expect(result.session.state).toBe("active_valid");
+    expect("blockIds" in result.session).toBe(false);
+    expect("artifactIds" in result.session).toBe(false);
+    expect("metadata" in result.session).toBe(false);
     expect(result.scoring.components.validTime.weighted).toBe(35);
     expect(result.contractEvaluation.criticalViolationCodes).toEqual(["pause_exceeded"]);
     expect(result.contractEvaluation.warningCodes).toEqual(["viva_failed"]);

@@ -32,6 +32,9 @@ export const RESUME_REASONS = [
   "manual_clear",
   "admin_clear"
 ] as const;
+// Keep this runtime validation list aligned with the domain ResumeReason union that the
+// backend orchestrator passes through to M2. The API layer intentionally validates here,
+// but the semantic source of truth still lives in the domain layer.
 export const AVOIDANCE_SEVERITIES = [
   "none",
   "low",

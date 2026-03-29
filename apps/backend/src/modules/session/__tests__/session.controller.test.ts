@@ -305,6 +305,16 @@ describe("SessionController", () => {
     expect(result.scoring?.sessionScore).toBe(91);
   });
 
+  it("returns scoring: null when no scoring result exists yet", async () => {
+    orchestrator.getSessionScoring.mockResolvedValue(null);
+    const controller = new SessionController(orchestrator as never);
+
+    const result = await controller.getScoring("session_1");
+
+    expectOnlyCalled("getSessionScoring");
+    expect(result).toEqual({ scoring: null });
+  });
+
   it("delegates getEvents once and returns GetEventsResponse", async () => {
     orchestrator.getSessionEvents.mockResolvedValue(createAggregate().events);
     const controller = new SessionController(orchestrator as never);
