@@ -89,6 +89,8 @@ model Session {
   vivaAttempts          VivaAttempt[]
   penalties             Penalty[]
   telemetryEvents       TelemetryEvent[]
+  telemetrySummaries    TelemetrySummary[]
+  telemetryCheckpoint   TelemetryAnalysisCheckpoint?
   domainEvents          DomainEvent[]
   scoringResults        ScoringResult[]
   contractEvaluations   ContractEvaluationResult[]
@@ -212,16 +214,57 @@ model Penalty {
 }
 
 model TelemetryEvent {
-  id          String   @id
-  userId      String
-  sessionId   String?
-  source      String
-  type        String
-  occurredAt  DateTime
-  receivedAt  DateTime
-  payloadJson String
-  createdAt   DateTime
-  session     Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id               String   @id
+  userId           String
+  sessionId        String?
+  clientEventId    String?
+  source           String
+  type             String
+  occurredAt       DateTime
+  receivedAt       DateTime
+  serverReceivedAt DateTime
+  payloadJson      String
+  createdAt        DateTime
+  session          Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, serverReceivedAt])
+  @@unique([sessionId, clientEventId])
+}
+
+model TelemetrySummary {
+  id                           String   @id
+  sessionId                    String
+  windowStartsAt               DateTime
+  windowEndsAt                 DateTime
+  rawEventCount                Int
+  lastRawEventId               String
+  idleMinutes                  Float
+  longestIdleStretchMinutes    Float
+  contextSwitchCount           Int
+  nonStudyContextMinutes       Float
+  nonStudyContextDetected      Boolean
+  inputActivityLevel           String
+  sessionElapsedMinutes        Float
+  sessionValidMinutes          Float
+  sessionInvalidMinutes        Float
+  sessionWarningCount          Int
+  sessionMissedCheckpointCount Int
+  currentWarningActive         Boolean
+  currentWarningDurationMinutes Float
+  createdAt                    DateTime
+  session                      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+model TelemetryAnalysisCheckpoint {
+  id                    String   @id
+  sessionId             String   @unique
+  lastProcessedRawEventId String?
+  lastAnalyzedAt        DateTime?
+  createdAt             DateTime
+  updatedAt             DateTime
+  session               Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model DomainEvent {

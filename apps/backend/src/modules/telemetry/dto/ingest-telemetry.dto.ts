@@ -1,7 +1,15 @@
 import {
+  batchIngestEnvelopeSchema,
+  batchIngestRequestSchema,
   ingestTelemetryRequestSchema,
+  type BatchIngestEnvelopeInput,
+  type BatchIngestRequest,
   type IngestTelemetryRequest
 } from "@medstudy/contracts";
 
-export { ingestTelemetryRequestSchema };
-export type { IngestTelemetryRequest };
+export { batchIngestEnvelopeSchema, batchIngestRequestSchema, ingestTelemetryRequestSchema };
+export type {
+  BatchIngestEnvelopeInput,
+  BatchIngestRequest,
+  IngestTelemetryRequest
+};

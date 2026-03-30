@@ -247,6 +247,21 @@ export class SessionRepository {
     }));
   }
 
+  async listSessionIdsByStates(states: readonly Session["state"][]) {
+    const sessions = await this.prisma.session.findMany({
+      where: {
+        state: {
+          in: [...states]
+        }
+      },
+      select: {
+        id: true
+      }
+    });
+
+    return sessions.map((session) => session.id);
+  }
+
   async getLatestScoring(sessionId: string): Promise<ScoringResult | null> {
     const record = await this.prisma.scoringResult.findFirst({
       where: { sessionId },

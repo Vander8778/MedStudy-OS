@@ -26,6 +26,7 @@ export const antiAvoidanceSummaryViewSchema = z.object({
 export const ingestTelemetryRequestSchema = z.object({
   userId: nonEmptyStringSchema,
   sessionId: nonEmptyStringSchema.optional(),
+  clientEventId: nonEmptyStringSchema.optional(),
   source: z.enum(TELEMETRY_SOURCES),
   type: z.enum(TELEMETRY_EVENT_TYPES),
   occurredAt: isoDateTimeStringSchema,
@@ -41,8 +42,33 @@ export const ingestTelemetryRequestSchema = z.object({
 
 export const ingestTelemetryResponseSchema = z.object({
   telemetryEventId: nonEmptyStringSchema,
-  antiAvoidance: antiAvoidanceSummaryViewSchema.nullable()
+  accepted: z.literal(true)
+});
+
+export const batchIngestEnvelopeSchema = z.object({
+  events: z.array(z.unknown())
+});
+
+export const batchIngestRequestSchema = z.object({
+  events: z.array(ingestTelemetryRequestSchema)
+});
+
+export const batchIngestResultSchema = z.object({
+  clientEventId: nonEmptyStringSchema.optional(),
+  telemetryEventId: nonEmptyStringSchema.optional(),
+  accepted: z.boolean(),
+  error: nonEmptyStringSchema.optional()
+});
+
+export const batchIngestResponseSchema = z.object({
+  results: z.array(batchIngestResultSchema),
+  acceptedCount: z.number().int().nonnegative(),
+  rejectedCount: z.number().int().nonnegative()
 });
 
 export type IngestTelemetryRequest = z.infer<typeof ingestTelemetryRequestSchema>;
 export type IngestTelemetryResponse = z.infer<typeof ingestTelemetryResponseSchema>;
+export type BatchIngestEnvelopeInput = z.infer<typeof batchIngestEnvelopeSchema>;
+export type BatchIngestRequest = z.infer<typeof batchIngestRequestSchema>;
+export type BatchIngestResult = z.infer<typeof batchIngestResultSchema>;
+export type BatchIngestResponse = z.infer<typeof batchIngestResponseSchema>;

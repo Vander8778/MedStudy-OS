@@ -1,8 +1,17 @@
 import { Body, Controller, Inject, Post } from "@nestjs/common";
-import type { IngestTelemetryRequest } from "@medstudy/contracts";
-import { mapTelemetryIngestResponse } from "../../common/view-mappers";
+import type {
+  BatchIngestEnvelopeInput,
+  IngestTelemetryRequest
+} from "@medstudy/contracts";
+import {
+  mapTelemetryBatchIngestResponse,
+  mapTelemetryIngestResponse
+} from "../../common/view-mappers";
 import { ZodValidationPipe } from "../../common/zod-validation.pipe";
-import { ingestTelemetryRequestSchema } from "./dto/ingest-telemetry.dto";
+import {
+  batchIngestEnvelopeSchema,
+  ingestTelemetryRequestSchema
+} from "./dto/ingest-telemetry.dto";
 import { TelemetryProcessor } from "./telemetry.processor";
 
 @Controller("telemetry")
@@ -17,5 +26,14 @@ export class TelemetryController {
     @Body(new ZodValidationPipe(ingestTelemetryRequestSchema)) body: IngestTelemetryRequest
   ) {
     return mapTelemetryIngestResponse(await this.telemetryProcessor.ingestEvent(body));
+  }
+
+  @Post("events/batch")
+  async ingestTelemetryBatch(
+    @Body(new ZodValidationPipe(batchIngestEnvelopeSchema)) body: BatchIngestEnvelopeInput
+  ) {
+    return mapTelemetryBatchIngestResponse(
+      await this.telemetryProcessor.ingestBatch(body)
+    );
   }
 }

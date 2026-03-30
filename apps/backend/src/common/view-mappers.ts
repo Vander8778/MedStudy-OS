@@ -1,4 +1,5 @@
 import type {
+  BatchIngestResponse,
   ArtifactView,
   ComponentScoreView,
   ContractEvaluationSummaryView,
@@ -23,6 +24,7 @@ import type {
 } from "@medstudy/contracts";
 import type {
   Artifact,
+  Checkpoint,
   Contract,
   ContractEvaluationResult,
   Penalty,
@@ -30,9 +32,7 @@ import type {
   Session,
   SessionBlock,
   SessionEvent,
-  VivaAttempt,
-  Checkpoint,
-  AntiAvoidanceResult
+  VivaAttempt
 } from "@medstudy/domain";
 import type { SessionAggregate } from "../modules/session/session.repository";
 
@@ -293,23 +293,20 @@ export function mapContractResponse(contract: Contract): ContractResponse {
 
 export function mapTelemetryIngestResponse(result: {
   telemetryEvent: { id: string };
-  antiAvoidance: AntiAvoidanceResult | null;
+  accepted: true;
 }): IngestTelemetryResponse {
   return {
     telemetryEventId: result.telemetryEvent.id,
-    antiAvoidance: result.antiAvoidance
-      ? {
-          patterns: result.antiAvoidance.patterns.map((pattern) => ({
-            pattern: pattern.pattern,
-            detected: pattern.detected,
-            severity: pattern.severity,
-            message: pattern.message,
-            details: pattern.details
-          })),
-          overallSeverity: result.antiAvoidance.overallSeverity,
-          hasEscalationSignal: result.antiAvoidance.hasEscalationSignal,
-          recommendedResponses: [...result.antiAvoidance.recommendedResponses]
-        }
-      : null
+    accepted: result.accepted
+  };
+}
+
+export function mapTelemetryBatchIngestResponse(
+  result: BatchIngestResponse
+): BatchIngestResponse {
+  return {
+    results: result.results.map((item) => ({ ...item })),
+    acceptedCount: result.acceptedCount,
+    rejectedCount: result.rejectedCount
   };
 }
