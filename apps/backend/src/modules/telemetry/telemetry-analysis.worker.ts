@@ -47,6 +47,9 @@ export type TelemetryAnalysisRunResult =
 
 @Injectable()
 export class TelemetryAnalysisWorker {
+  // Defense-in-depth: the scheduler already guards in-flight session work, but the worker
+  // also protects itself so direct callers cannot accidentally double-enter analysis for the
+  // same session in the future.
   private readonly runningSessions = new Set<string>();
 
   constructor(
@@ -217,6 +220,9 @@ export class TelemetryAnalysisWorker {
           checkpoint.lastAnalyzedAt ?? rawEvents[0].serverReceivedAt
       });
 
+      // The summary is persisted before orchestration so each analysis attempt leaves an
+      // audit trail. If actionable routing fails later, the checkpoint intentionally stays
+      // behind and a retry may persist another summary for the same raw window in the MVP.
       await this.telemetryRepository.saveSummary(summary);
 
       const history = await this.buildAvoidanceHistory(aggregate);

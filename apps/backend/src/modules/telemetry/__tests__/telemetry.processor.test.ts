@@ -114,4 +114,70 @@ describe("TelemetryProcessor", () => {
       rejectedCount: 2
     });
   });
+
+  it("registers only batch events that include a sessionId for deferred analysis", async () => {
+    const telemetryRepository = {
+      createEvent: vi
+        .fn()
+        .mockResolvedValueOnce({
+          event: { id: "telemetry_1" },
+          duplicate: false
+        })
+        .mockResolvedValueOnce({
+          event: { id: "telemetry_2" },
+          duplicate: false
+        })
+    };
+    const scheduler = {
+      registerSession: vi.fn()
+    };
+    const processor = new TelemetryProcessor(
+      telemetryRepository as never,
+      scheduler as never
+    );
+
+    const result = await processor.ingestBatch({
+      events: [
+        {
+          userId: "user_1",
+          sessionId: "session_1",
+          clientEventId: "client_1",
+          source: "desktop",
+          type: "heartbeat",
+          occurredAt: "2026-03-30T09:10:00.000Z",
+          receivedAt: "2026-03-30T09:10:05.000Z",
+          payload: {}
+        },
+        {
+          userId: "user_1",
+          clientEventId: "client_2",
+          source: "desktop",
+          type: "manual_note",
+          occurredAt: "2026-03-30T09:11:00.000Z",
+          receivedAt: "2026-03-30T09:11:05.000Z",
+          payload: {}
+        }
+      ]
+    });
+
+    expect(telemetryRepository.createEvent).toHaveBeenCalledTimes(2);
+    expect(scheduler.registerSession).toHaveBeenCalledTimes(1);
+    expect(scheduler.registerSession).toHaveBeenCalledWith("session_1");
+    expect(result).toEqual({
+      results: [
+        {
+          clientEventId: "client_1",
+          telemetryEventId: "telemetry_1",
+          accepted: true
+        },
+        {
+          clientEventId: "client_2",
+          telemetryEventId: "telemetry_2",
+          accepted: true
+        }
+      ],
+      acceptedCount: 2,
+      rejectedCount: 0
+    });
+  });
 });

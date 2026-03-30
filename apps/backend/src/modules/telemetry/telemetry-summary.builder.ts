@@ -131,6 +131,11 @@ function getIdleEventMetrics(rawEvents: readonly TelemetryEventRecord[]) {
 }
 
 function getNonStudyContextMinutes(rawEvents: readonly TelemetryEventRecord[]) {
+  // MVP note: desktop/mobile emitters can either send an explicit non-study duration,
+  // a generic duration for a non-study context event, or only a context flag that we
+  // interpret by spanning to the next server-received event. This layered fallback keeps
+  // the builder resilient across current payload variants, but the payload contract should
+  // be formalized before expanding telemetry producers.
   return rawEvents.reduce((total, event, index) => {
     const explicitDuration =
       typeof event.payload.nonStudyContextMinutes === "number"
@@ -176,11 +181,13 @@ export function buildTelemetrySummary(
   const nonStudyContextMinutes = getNonStudyContextMinutes(orderedEvents);
   const windowStartsAt = input.windowStartsAt ?? firstEvent?.serverReceivedAt ?? input.now;
   const windowEndsAt = lastEvent?.serverReceivedAt ?? input.now;
-  const sessionAnchor = input.session.startedAt ?? input.session.createdAt;
-  const sessionElapsedMinutes = Math.max(
-    (Date.parse(windowEndsAt) - Date.parse(sessionAnchor)) / 60000,
-    0
-  );
+  const sessionElapsedMinutes =
+    input.session.startedAt === undefined
+      ? 0
+      : Math.max(
+          (Date.parse(windowEndsAt) - Date.parse(input.session.startedAt)) / 60000,
+          0
+        );
 
   return {
     id: createId("telemetry_summary"),

@@ -108,6 +108,31 @@ describe("buildTelemetrySummary", () => {
     expect(summary.inputActivityLevel).toBe("none");
   });
 
+  it("keeps sessionElapsedMinutes at zero when telemetry exists before a session start time is known", () => {
+    const summary = buildTelemetrySummary({
+      session: {
+        id: "session_1",
+        state: "active_valid",
+        createdAt: "2026-03-30T08:55:00.000Z",
+        validMinutes: 0,
+        invalidMinutes: 0,
+        warningCount: 0,
+        missedCheckpointCount: 0,
+        currentWarningDurationMinutes: 0
+      },
+      rawEvents: [
+        createEvent({
+          id: "event_1",
+          type: "heartbeat",
+          serverReceivedAt: "2026-03-30T09:08:00.000Z"
+        })
+      ],
+      now: "2026-03-30T09:08:00.000Z"
+    });
+
+    expect(summary.sessionElapsedMinutes).toBe(0);
+  });
+
   it("computes idle stretch from heartbeat gaps using serverReceivedAt as the authoritative clock", () => {
     const summary = buildTelemetrySummary({
       session: {

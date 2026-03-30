@@ -63,6 +63,9 @@ export class TelemetryAnalysisScheduler
       .filter(([, dueAt]) => dueAt <= now)
       .map(([sessionId]) => sessionId);
 
+    // MVP note: due sessions are processed sequentially to keep the scheduler simple and to
+    // make per-session flow easier to reason about. This should be parallelized later once
+    // the runtime needs higher throughput; inFlightSessions already provides the safety hook.
     for (const sessionId of dueSessionIds) {
       await this.processDueSession(sessionId, now);
     }

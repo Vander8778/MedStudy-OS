@@ -117,6 +117,51 @@ function createAggregate(state: Session["state"] = "active_valid") {
 }
 
 describe("TelemetryAnalysisWorker", () => {
+  it("skips direct re-entry for the same session as a worker-level safety guard", async () => {
+    let release: (() => void) | undefined;
+    const telemetryRepository = {
+      getOrCreateCheckpoint: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = () =>
+              resolve({
+                id: "checkpoint_1",
+                sessionId: "session_1",
+                createdAt: "2026-03-30T09:00:00.000Z",
+                updatedAt: "2026-03-30T09:00:00.000Z"
+              });
+          })
+      ),
+      findEventsSinceCheckpoint: vi.fn(async () => []),
+      saveSummary: vi.fn(),
+      advanceCheckpoint: vi.fn(),
+      countPreviousSessionAvoidanceResults: vi.fn()
+    };
+    const sessionRepository = {
+      findSessionAggregateOrThrow: vi.fn(async () => createAggregate("active_valid"))
+    };
+    const orchestrator = {
+      processAvoidanceAssessment: vi.fn()
+    };
+    const worker = new TelemetryAnalysisWorker(
+      telemetryRepository as never,
+      sessionRepository as never,
+      orchestrator as never
+    );
+
+    const firstRun = worker.processSessionAnalysis("session_1");
+    const secondRun = worker.processSessionAnalysis("session_1");
+
+    await expect(secondRun).resolves.toEqual({
+      status: "skipped",
+      deregister: false,
+      reason: "already_running"
+    });
+
+    release?.();
+    await firstRun;
+  });
+
   it("skips terminal and non-active sessions", async () => {
     const telemetryRepository = {
       getOrCreateCheckpoint: vi.fn(),
@@ -241,6 +286,12 @@ describe("TelemetryAnalysisWorker", () => {
 
     expect(result.status).toBe("processed");
     expect(telemetryRepository.saveSummary).toHaveBeenCalledTimes(1);
+    expect(telemetryRepository.saveSummary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session_1",
+        rawEventCount: 3
+      })
+    );
     expect(orchestrator.processAvoidanceAssessment).toHaveBeenCalledWith(
       "session_1",
       expect.objectContaining({

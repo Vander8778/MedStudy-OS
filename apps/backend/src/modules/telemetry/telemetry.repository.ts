@@ -218,8 +218,17 @@ export class TelemetryRepository {
     checkpoint: TelemetryAnalysisCheckpointRecord,
     db?: DbClient
   ): Promise<readonly TelemetryEventRecord[]> {
+    const where =
+      checkpoint.lastAnalyzedAt === undefined
+        ? { sessionId }
+        : {
+            sessionId,
+            serverReceivedAt: {
+              gte: toDate(checkpoint.lastAnalyzedAt)
+            }
+          };
     const records = await this.getDb(db).telemetryEvent.findMany({
-      where: { sessionId },
+      where,
       orderBy: [
         { serverReceivedAt: "asc" },
         { createdAt: "asc" }

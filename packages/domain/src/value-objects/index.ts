@@ -3,6 +3,8 @@ export * from "./contract-terms";
 export * from "./ids";
 export * from "./primitives";
 export * from "./time";
+// Enum types intentionally come from @medstudy/contracts so the domain package does not
+// maintain a second diverging enum source of truth.
 export type {
   ActorType,
   ArtifactSource,

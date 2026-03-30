@@ -45,6 +45,10 @@ export class TelemetryProcessor {
   }
 
   async ingestBatch(input: BatchIngestEnvelopeInput): Promise<BatchIngestResponse> {
+    // MVP note: batch ingestion is intentionally persistence-safe rather than bulk-optimized.
+    // We validate and insert serially so partial-success semantics and duplicate reporting stay
+    // explicit per item, but large reconnect batches will still incur one-or-more DB round-trips
+    // per event until a later bulk ingestion path is introduced.
     const results: BatchIngestResponse["results"] = [];
 
     for (const rawEvent of input.events) {
