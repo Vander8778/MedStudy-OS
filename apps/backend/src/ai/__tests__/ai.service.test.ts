@@ -115,6 +115,7 @@ describe("AiService", () => {
     );
 
     expect(result).toMatchObject({
+      status: "succeeded",
       capabilityKey: "planning.session",
       promptKey: "planning.session",
       model: "mock-model",

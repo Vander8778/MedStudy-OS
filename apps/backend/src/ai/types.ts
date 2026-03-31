@@ -70,9 +70,10 @@ export class AiProviderError extends Error {
     readonly kind: AiProviderErrorKind,
     message: string,
     readonly retryable: boolean,
-    readonly statusCode?: number
+    readonly statusCode?: number,
+    options?: ErrorOptions
   ) {
-    super(message);
+    super(message, options);
     this.name = "AiProviderError";
   }
 }
@@ -104,6 +105,7 @@ export type OutputValidationFailure = {
 };
 
 export type AiCapabilityResult<T> = {
+  status: "succeeded";
   capabilityKey: string;
   promptKey: string;
   promptVersion: string;
@@ -117,8 +119,10 @@ export type AiCapabilityResult<T> = {
 };
 
 export type AiCapabilityFailure = {
+  status: "failed";
   capabilityKey: string;
   promptKey: string;
+  promptVersion?: string;
   requestId: string;
   attemptCount: number;
   lastError: string;
@@ -129,6 +133,8 @@ export type CapabilityRetryOptions = {
   maxAttempts?: number;
   baseDelayMs?: number;
   backoffMultiplier?: number;
+  // Defaults to true in the retry pipeline, so capabilities only need to set this
+  // when they want to disable correction hints after schema-validation failures.
   correctionHint?: boolean;
 };
 

@@ -24,6 +24,7 @@ function createTemplate(): PromptTemplateRecord {
 function createPipeline(overrides?: {
   complete?: ReturnType<typeof vi.fn>;
   save?: ReturnType<typeof vi.fn>;
+  resolve?: ReturnType<typeof vi.fn>;
 }) {
   const provider = {
     complete: overrides?.complete ?? vi.fn()
@@ -40,7 +41,7 @@ function createPipeline(overrides?: {
       getAuditLevel: () => "minimal"
     } as never,
     {
-      resolve: () => createTemplate()
+      resolve: overrides?.resolve ?? (() => createTemplate())
     } as never,
     new PromptRenderer(),
     new OutputValidator(),
@@ -94,6 +95,7 @@ describe("RetryPipeline", () => {
     });
 
     expect(result).toMatchObject({
+      status: "succeeded",
       capabilityKey: "planning.session",
       promptKey: "planning.session",
       attemptCount: 3,
@@ -131,6 +133,7 @@ describe("RetryPipeline", () => {
     });
 
     expect(result).toMatchObject({
+      status: "succeeded",
       attemptCount: 2,
       data: { value: "ok" }
     });
@@ -154,11 +157,38 @@ describe("RetryPipeline", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
+        status: "failed",
+        promptVersion: "1.0.0",
         attemptCount: 1,
         lastError: "Unauthorized"
       })
     );
     expect(provider.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a typed failure when the prompt registry cannot resolve a template", async () => {
+    const resolve = vi.fn(() => null);
+    const { pipeline, provider, save } = createPipeline({ resolve });
+
+    const result = await pipeline.execute({
+      capabilityKey: "planning.session",
+      promptKey: "planning.session",
+      inputSchema: z.object({ value: z.string() }),
+      outputSchema: z.object({ value: z.string() }).strict(),
+      input: { value: "hello" }
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "failed",
+        promptVersion: undefined,
+        attemptCount: 0,
+        lastError: "Prompt template not found for key planning.session."
+      })
+    );
+    expect(resolve).toHaveBeenCalledWith("planning.session");
+    expect(provider.complete).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledTimes(1);
   });
 
   it("returns a typed failure when retries are exhausted", async () => {
@@ -184,6 +214,8 @@ describe("RetryPipeline", () => {
 
     expect(result).toEqual(
       expect.objectContaining({
+        status: "failed",
+        promptVersion: "1.0.0",
         attemptCount: 2,
         lastError: "Model output JSON failed schema validation."
       })
@@ -229,5 +261,37 @@ describe("RetryPipeline", () => {
         )
       })
     );
+  });
+
+  it("returns a validated success result even when success-path audit logging fails", async () => {
+    const complete = vi.fn().mockResolvedValue({
+      rawText: '{"value":"ok"}',
+      model: "test-model",
+      inputTokens: 10,
+      outputTokens: 5,
+      latencyMs: 20,
+      requestId: "request_1"
+    });
+    const save = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("audit unavailable"));
+    const { pipeline } = createPipeline({ complete, save });
+
+    const result = await pipeline.execute({
+      capabilityKey: "planning.session",
+      promptKey: "planning.session",
+      inputSchema: z.object({ value: z.string() }),
+      outputSchema: z.object({ value: z.string() }).strict(),
+      input: { value: "hello" }
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        status: "succeeded",
+        data: { value: "ok" },
+        attemptCount: 1
+      })
+    );
+    expect(save).toHaveBeenCalledTimes(1);
   });
 });

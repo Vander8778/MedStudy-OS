@@ -28,7 +28,8 @@ export class AnthropicProvider implements AiProvider {
       throw new AiProviderError(
         "config",
         "ANTHROPIC_API_KEY is not configured.",
-        false
+        false,
+        undefined
       );
     }
 
@@ -43,9 +44,19 @@ export class AnthropicProvider implements AiProvider {
       throw new AiProviderError(
         "config",
         "@anthropic-ai/sdk is not installed.",
-        false
+        false,
+        undefined
       );
     }
+  }
+
+  private buildSystemPrompt(
+    systemPrompt: string,
+    developerPrompt?: string
+  ) {
+    return developerPrompt
+      ? `${systemPrompt}\n\nDeveloper instructions:\n${developerPrompt}`
+      : systemPrompt;
   }
 
   private classifyError(error: unknown): AiProviderError {
@@ -62,15 +73,21 @@ export class AnthropicProvider implements AiProvider {
     const message = candidate.message ?? "Unknown Anthropic provider error.";
 
     if (candidate.status === 401 || candidate.status === 403) {
-      return new AiProviderError("auth", message, false, candidate.status);
+      return new AiProviderError("auth", message, false, candidate.status, {
+        cause: error
+      });
     }
 
     if (candidate.status === 429) {
-      return new AiProviderError("rate_limit", message, true, candidate.status);
+      return new AiProviderError("rate_limit", message, true, candidate.status, {
+        cause: error
+      });
     }
 
     if (typeof candidate.status === "number" && candidate.status >= 500) {
-      return new AiProviderError("server", message, true, candidate.status);
+      return new AiProviderError("server", message, true, candidate.status, {
+        cause: error
+      });
     }
 
     if (
@@ -78,10 +95,14 @@ export class AnthropicProvider implements AiProvider {
       candidate.code === "ETIMEDOUT" ||
       candidate.code === "ECONNRESET"
     ) {
-      return new AiProviderError("timeout", message, true, candidate.status);
+      return new AiProviderError("timeout", message, true, candidate.status, {
+        cause: error
+      });
     }
 
-    return new AiProviderError("unknown", message, false, candidate.status);
+    return new AiProviderError("unknown", message, false, candidate.status, {
+      cause: error
+    });
   }
 
   async complete(request: AiCompletionRequest): Promise<AiCompletionResponse> {
@@ -93,13 +114,14 @@ export class AnthropicProvider implements AiProvider {
         model: request.config.model,
         max_tokens: request.config.maxTokens,
         temperature: request.config.temperature,
-        system: request.systemPrompt,
+        system: this.buildSystemPrompt(
+          request.systemPrompt,
+          request.developerPrompt
+        ),
         messages: [
           {
             role: "user",
-            content: request.developerPrompt
-              ? `Developer instructions:\n${request.developerPrompt}\n\nUser request:\n${request.userPrompt}`
-              : request.userPrompt
+            content: request.userPrompt
           }
         ]
       });

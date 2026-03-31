@@ -114,13 +114,16 @@ export class RetryPipeline {
     requestId: string,
     capabilityKey: string,
     promptKey: string,
+    promptVersion: string | undefined,
     attemptCount: number,
     lastError: string,
     lastValidationErrors?: unknown
   ): AiCapabilityFailure {
     return {
+      status: "failed",
       capabilityKey,
       promptKey,
+      promptVersion,
       requestId,
       attemptCount,
       lastError,
@@ -159,6 +162,7 @@ export class RetryPipeline {
         requestId,
         request.capabilityKey,
         request.promptKey,
+        undefined,
         0,
         "Capability input validation failed.",
         parsedInput.error.issues
@@ -190,6 +194,7 @@ export class RetryPipeline {
         requestId,
         request.capabilityKey,
         request.promptKey,
+        undefined,
         0,
         `Prompt template not found for key ${request.promptKey}.`
       );
@@ -224,6 +229,7 @@ export class RetryPipeline {
     const baseDelayMs = request.retryOptions?.baseDelayMs ?? 500;
     const backoffMultiplier = request.retryOptions?.backoffMultiplier ?? 2;
     const enableCorrectionHint = request.retryOptions?.correctionHint ?? true;
+    const rendered = this.promptRenderer.render<TInput>(prompt, parsedInput.data);
     let attemptCount = 0;
     let totalLatencyMs = 0;
     let inputTokens = 0;
@@ -233,39 +239,38 @@ export class RetryPipeline {
     let lastRawOutput: string | undefined;
     let correctionHintErrors: unknown;
 
+    if (!rendered.ok) {
+      const failure = this.buildFailure(
+        requestId,
+        request.capabilityKey,
+        request.promptKey,
+        prompt.version,
+        1,
+        rendered.error,
+        rendered.issues
+      );
+
+      await this.aiRequestLogRepository.save({
+        requestId,
+        capabilityKey: request.capabilityKey,
+        promptKey: request.promptKey,
+        promptVersion: prompt.version,
+        model: providerConfig.model,
+        inputSummary: this.summarizeInput(parsedInput.data),
+        status: "failed",
+        attemptCount: 1,
+        inputTokens,
+        outputTokens,
+        totalLatencyMs,
+        sessionId: this.extractSessionId(parsedInput.data),
+        userId: this.extractUserId(parsedInput.data)
+      });
+
+      return failure;
+    }
+
     while (attemptCount < maxAttempts) {
       attemptCount += 1;
-
-      const rendered = this.promptRenderer.render<TInput>(prompt, parsedInput.data);
-
-      if (!rendered.ok) {
-        const failure = this.buildFailure(
-          requestId,
-          request.capabilityKey,
-          request.promptKey,
-          attemptCount,
-          rendered.error,
-          rendered.issues
-        );
-
-        await this.aiRequestLogRepository.save({
-          requestId,
-          capabilityKey: request.capabilityKey,
-          promptKey: request.promptKey,
-          promptVersion: prompt.version,
-          model: providerConfig.model,
-          inputSummary: this.summarizeInput(parsedInput.data),
-          status: "failed",
-          attemptCount,
-          inputTokens,
-          outputTokens,
-          totalLatencyMs,
-          sessionId: this.extractSessionId(parsedInput.data),
-          userId: this.extractUserId(parsedInput.data)
-        });
-
-        return failure;
-      }
 
       try {
         const response = await provider.complete({
@@ -293,6 +298,7 @@ export class RetryPipeline {
 
         if (validated.ok) {
           const result: AiCapabilityResult<TOutput> = {
+            status: "succeeded",
             capabilityKey: request.capabilityKey,
             promptKey: request.promptKey,
             promptVersion: prompt.version,
@@ -305,25 +311,30 @@ export class RetryPipeline {
             totalLatencyMs
           };
 
-          await this.aiRequestLogRepository.save({
-            requestId,
-            capabilityKey: request.capabilityKey,
-            promptKey: request.promptKey,
-            promptVersion: prompt.version,
-            model: response.model,
-            inputSummary: this.summarizeInput(parsedInput.data),
-            validatedOutput: validated.parsedJson,
-            rawOutput: this.shouldStoreRawOutput(auditLevel)
-              ? response.rawText
-              : undefined,
-            status: "succeeded",
-            attemptCount,
-            inputTokens,
-            outputTokens,
-            totalLatencyMs,
-            sessionId: this.extractSessionId(parsedInput.data),
-            userId: this.extractUserId(parsedInput.data)
-          });
+          try {
+            await this.aiRequestLogRepository.save({
+              requestId,
+              capabilityKey: request.capabilityKey,
+              promptKey: request.promptKey,
+              promptVersion: prompt.version,
+              model: response.model,
+              inputSummary: this.summarizeInput(parsedInput.data),
+              validatedOutput: validated.parsedJson,
+              rawOutput: this.shouldStoreRawOutput(auditLevel)
+                ? response.rawText
+                : undefined,
+              status: "succeeded",
+              attemptCount,
+              inputTokens,
+              outputTokens,
+              totalLatencyMs,
+              sessionId: this.extractSessionId(parsedInput.data),
+              userId: this.extractUserId(parsedInput.data)
+            });
+          } catch {
+            // Best-effort audit persistence on success: the validated AI output is still
+            // returned so orchestration does not lose a usable result due to audit failure.
+          }
 
           return result;
         }
@@ -339,7 +350,13 @@ export class RetryPipeline {
         const providerError =
           error instanceof AiProviderError
             ? error
-            : new AiProviderError("unknown", "Unknown AI provider failure.", false);
+            : new AiProviderError(
+                "unknown",
+                "Unknown AI provider failure.",
+                false,
+                undefined,
+                { cause: error }
+              );
 
         lastError = providerError.message;
 
@@ -357,6 +374,7 @@ export class RetryPipeline {
       requestId,
       request.capabilityKey,
       request.promptKey,
+      prompt.version,
       attemptCount,
       lastError,
       lastValidationErrors
