@@ -7,10 +7,12 @@ import { AuditModule } from "./modules/audit/audit.module";
 import { NotificationModule } from "./modules/notification/notification.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { PrismaModule } from "./prisma/prisma.module";
+import { AiModule } from "./ai/ai.module";
 
 @Module({
   imports: [
     PrismaModule,
+    AiModule,
     AuditModule,
     NotificationModule,
     ContractModule,

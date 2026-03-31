@@ -12,6 +12,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.54.0",
     "@medstudy/ai-schemas": "workspace:*",
     "@medstudy/contracts": "workspace:*",
     "@medstudy/domain": "workspace:*",

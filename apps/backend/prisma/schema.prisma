@@ -312,3 +312,26 @@ model AntiAvoidanceResult {
   createdAt           DateTime
   session             Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
+
+model AiRequestLog {
+  requestId           String   @id
+  capabilityKey       String
+  promptKey           String
+  promptVersion       String
+  model               String
+  inputSummaryJson    String
+  validatedOutputJson String?
+  rawOutputText       String?
+  status              String
+  attemptCount        Int
+  inputTokens         Int
+  outputTokens        Int
+  totalLatencyMs      Int
+  sessionId           String?
+  userId              String?
+  createdAt           DateTime
+
+  @@index([capabilityKey, createdAt])
+  @@index([sessionId, createdAt])
+  @@index([userId, createdAt])
+}

@@ -15,7 +15,8 @@
     "dist"
   ],
   "dependencies": {
-    "@medstudy/contracts": "workspace:*"
+    "@medstudy/contracts": "workspace:*",
+    "zod": "^3.24.2"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
