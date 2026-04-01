@@ -8,6 +8,7 @@ import type {
 type MasteryCalculationInput = {
   sessionOutcome: SessionGamificationOutcome;
   finalScore: number;
+  hasCriticalViolation: boolean;
   currentMasteryTracks: readonly MasteryTrackProgress[];
 };
 
@@ -76,6 +77,23 @@ function updateTrack(
 export function calculateMasteryProgress(
   input: MasteryCalculationInput
 ): MasteryCalculationResult {
+  if (input.hasCriticalViolation) {
+    return {
+      incrementPercent: 0,
+      updates: input.currentMasteryTracks.map((track) => ({
+        trackId: track.id,
+        trackKey: track.key,
+        previousLevel: track.currentLevel,
+        newLevel: track.currentLevel,
+        previousProgressPercent: track.progressPercent,
+        newProgressPercent: track.progressPercent,
+        levelsGained: 0,
+        leveledUp: false
+      })),
+      totalLevelsGained: 0
+    };
+  }
+
   const incrementPercent = getIncrementPercent(
     input.sessionOutcome,
     input.finalScore

@@ -78,7 +78,7 @@ export function calculateAvatarStatProgress(
     )
   };
 
-  const deltas: AvatarStatDelta[] = [
+  const deltas = [
     {
       key: "discipline",
       previousValue: input.currentAvatarStats.discipline,
@@ -113,10 +113,10 @@ export function calculateAvatarStatProgress(
       delta: toAvatarStatValue(newStats.recovery - input.currentAvatarStats.recovery),
       newValue: newStats.recovery
     }
-  ].filter((delta) => delta.delta > 0);
+  ] satisfies AvatarStatDelta[];
 
   return {
     newStats,
-    deltas
+    deltas: deltas.filter((delta) => delta.delta > 0)
   };
 }

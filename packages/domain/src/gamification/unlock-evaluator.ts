@@ -18,6 +18,24 @@ type UnlockEvaluationInput = {
   contractCompletionCount: number;
 };
 
+function getAvatarStatValue(
+  avatarStats: AvatarStats,
+  statKey: "discipline" | "consistency" | "clinicalThinking" | "knowledgeDepth" | "recovery"
+) {
+  switch (statKey) {
+    case "discipline":
+      return avatarStats.discipline;
+    case "consistency":
+      return avatarStats.consistency;
+    case "clinicalThinking":
+      return avatarStats.clinicalThinking;
+    case "knowledgeDepth":
+      return avatarStats.knowledgeDepth;
+    case "recovery":
+      return avatarStats.recovery;
+  }
+}
+
 function isConditionMet(
   condition: UnlockCondition,
   input: UnlockEvaluationInput
@@ -34,7 +52,10 @@ function isConditionMet(
     case "total_xp_reached":
       return input.level.totalXP >= condition.threshold;
     case "stat_threshold_reached":
-      return input.avatarStats[condition.statKey] >= condition.threshold;
+      return (
+        getAvatarStatValue(input.avatarStats, condition.statKey) >=
+        condition.threshold
+      );
     case "session_outcome_count":
       return input.sessionOutcomeCounts[condition.outcome] >= condition.threshold;
     case "contract_completion":

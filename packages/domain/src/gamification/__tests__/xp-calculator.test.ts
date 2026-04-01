@@ -124,6 +124,19 @@ describe("calculateXP", () => {
     ]);
   });
 
+  it("awards zero XP when the daily cap is already exhausted", () => {
+    const result = calculateXP({
+      ...createInput(),
+      checkpointsCompleted: 3,
+      xpEarnedToday: 500
+    });
+
+    expect(result.totalXPRequested).toBe(130);
+    expect(result.totalXPAwarded).toBe(0);
+    expect(result.dailyCapApplied).toBe(true);
+    expect(result.ledger.map((entry) => entry.awardedAmount)).toEqual([0, 0]);
+  });
+
   it("applies checkpoint, artifact, and viva item caps", () => {
     const result = calculateXP({
       ...createInput(),

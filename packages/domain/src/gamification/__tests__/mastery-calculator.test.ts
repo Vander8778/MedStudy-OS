@@ -18,6 +18,7 @@ describe("calculateMasteryProgress", () => {
     const result = calculateMasteryProgress({
       sessionOutcome: "completed",
       finalScore: 80,
+      hasCriticalViolation: false,
       currentMasteryTracks: createTracks()
     });
 
@@ -33,6 +34,7 @@ describe("calculateMasteryProgress", () => {
     const result = calculateMasteryProgress({
       sessionOutcome: "partial",
       finalScore: 80,
+      hasCriticalViolation: false,
       currentMasteryTracks: createTracks()
     });
 
@@ -44,6 +46,7 @@ describe("calculateMasteryProgress", () => {
     const result = calculateMasteryProgress({
       sessionOutcome: "failed",
       finalScore: 90,
+      hasCriticalViolation: false,
       currentMasteryTracks: createTracks()
     });
 
@@ -56,6 +59,7 @@ describe("calculateMasteryProgress", () => {
     const result = calculateMasteryProgress({
       sessionOutcome: "completed",
       finalScore: 100,
+      hasCriticalViolation: false,
       currentMasteryTracks: [
         {
           id: "track_1",
@@ -79,6 +83,7 @@ describe("calculateMasteryProgress", () => {
     const result = calculateMasteryProgress({
       sessionOutcome: "completed",
       finalScore: 100,
+      hasCriticalViolation: false,
       currentMasteryTracks: [
         {
           id: "track_1",
@@ -94,6 +99,23 @@ describe("calculateMasteryProgress", () => {
       previousLevel: 3,
       newLevel: 3,
       newProgressPercent: 100
+    });
+  });
+
+  it("suppresses mastery gains for critical-violation sessions", () => {
+    const result = calculateMasteryProgress({
+      sessionOutcome: "completed",
+      finalScore: 100,
+      hasCriticalViolation: true,
+      currentMasteryTracks: createTracks()
+    });
+
+    expect(result.incrementPercent).toBe(0);
+    expect(result.totalLevelsGained).toBe(0);
+    expect(result.updates[0]).toMatchObject({
+      previousLevel: 1,
+      newLevel: 1,
+      newProgressPercent: 20
     });
   });
 });

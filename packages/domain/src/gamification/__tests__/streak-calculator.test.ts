@@ -72,4 +72,21 @@ describe("calculateStreak", () => {
     expect(result.streak.currentLength).toBe(5);
     expect(result.streak.longestLength).toBe(5);
   });
+
+  it("treats same-day re-qualification after a reset as a no-op", () => {
+    const firstResult = calculateStreak({
+      sessionOutcome: "completed",
+      currentStreak: createCurrentStreak(),
+      qualifyingDate: "2026-04-03"
+    });
+    const secondResult = calculateStreak({
+      sessionOutcome: "completed",
+      currentStreak: firstResult.streak,
+      qualifyingDate: "2026-04-03"
+    });
+
+    expect(firstResult.streak.currentLength).toBe(1);
+    expect(secondResult.incremented).toBe(false);
+    expect(secondResult.streak.currentLength).toBe(1);
+  });
 });

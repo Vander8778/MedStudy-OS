@@ -146,4 +146,21 @@ describe("evaluateUnlocks", () => {
       }
     ]);
   });
+
+  it("does not unlock mastery conditions when the track key does not match", () => {
+    const result = evaluateUnlocks({
+      ...createInput(),
+      unlockConditions: [
+        {
+          id: "c1",
+          avatarId: "avatar_mastery",
+          type: "mastery_level_reached",
+          trackKey: "neurology",
+          threshold: 2
+        }
+      ]
+    });
+
+    expect(result).toEqual([]);
+  });
 });

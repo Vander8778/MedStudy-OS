@@ -118,6 +118,35 @@ describe("processSessionOutcome", () => {
     expect(result.streak.currentLength).toBe(2);
   });
 
+  it("suppresses XP, stat, and mastery gains for penalized sessions", () => {
+    const result = processSessionOutcome({
+      ...createInput(),
+      sessionOutcome: "penalized"
+    });
+
+    expect(result.xp.totalXPAwarded).toBe(0);
+    expect(result.xp.zeroRewardReason).toBe("penalized_session");
+    expect(result.avatarStatDeltas).toEqual([]);
+    expect(result.mastery.totalLevelsGained).toBe(0);
+    expect(result.level.leveledUp).toBe(false);
+  });
+
+  it("suppresses mastery progression when a completed session has a critical violation", () => {
+    const result = processSessionOutcome({
+      ...createInput(),
+      hasCriticalViolation: true
+    });
+
+    expect(result.xp.totalXPAwarded).toBe(0);
+    expect(result.mastery.incrementPercent).toBe(0);
+    expect(result.mastery.totalLevelsGained).toBe(0);
+    expect(result.mastery.updates[0]).toMatchObject({
+      previousLevel: 1,
+      newLevel: 1,
+      newProgressPercent: 80
+    });
+  });
+
   it("applies anti-farming clamps on oversized sessions", () => {
     const result = processSessionOutcome({
       ...createInput(),

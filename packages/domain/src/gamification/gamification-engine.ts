@@ -18,6 +18,7 @@ export function processSessionOutcome(
   const mastery = calculateMasteryProgress({
     sessionOutcome: input.sessionOutcome,
     finalScore: input.finalScore,
+    hasCriticalViolation: input.hasCriticalViolation,
     currentMasteryTracks: input.currentMasteryTracks
   });
 
@@ -27,6 +28,8 @@ export function processSessionOutcome(
     checkpointsCompleted: input.checkpointsCompleted,
     artifactsAccepted: input.artifactsAccepted,
     vivaAttempts: input.vivaAttempts,
+    // Intentional: streak XP uses the post-session streak length so the session that
+    // reaches a qualifying streak threshold is the first one to receive that bonus.
     streakLength: streakChange.streak.currentLength,
     avoidanceDetected: input.avoidanceDetected,
     avoidanceRecovered: input.avoidanceRecovered,
