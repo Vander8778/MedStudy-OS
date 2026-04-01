@@ -137,6 +137,48 @@ export type AvatarRarity = (typeof AVATAR_RARITIES)[number];
 export const AVATAR_UNLOCK_SOURCES = ["onboarding", "streak", "mastery", "contract_completion", "admin_grant"] as const;
 export type AvatarUnlockSource = (typeof AVATAR_UNLOCK_SOURCES)[number];
 
+export const XP_SOURCES = [
+  "session_completed",
+  "session_partial",
+  "checkpoint_completed",
+  "artifact_accepted",
+  "viva_passed",
+  "streak_bonus",
+  "mastery_level_up",
+  "recovery_bonus"
+] as const;
+export type XPSource = (typeof XP_SOURCES)[number];
+
+export const AVATAR_STAT_KEYS = [
+  "discipline",
+  "consistency",
+  "clinicalThinking",
+  "knowledgeDepth",
+  "recovery"
+] as const;
+export type AvatarStatKey = (typeof AVATAR_STAT_KEYS)[number];
+
+export const UNLOCK_CONDITION_TYPES = [
+  "streak_reached",
+  "mastery_level_reached",
+  "total_xp_reached",
+  "stat_threshold_reached",
+  "session_outcome_count",
+  "contract_completion"
+] as const;
+export type UnlockConditionType = (typeof UNLOCK_CONDITION_TYPES)[number];
+
+export const GAMIFICATION_TRIGGER_TYPES = [
+  "xp_awarded",
+  "streak_updated",
+  "streak_broken",
+  "avatar_stat_changed",
+  "avatar_unlocked",
+  "mastery_level_up",
+  "level_up"
+] as const;
+export type GamificationTriggerType = (typeof GAMIFICATION_TRIGGER_TYPES)[number];
+
 export const MASTERY_TRACK_STATUSES = ["locked", "active", "completed", "archived"] as const;
 export type MasteryTrackStatus = (typeof MASTERY_TRACK_STATUSES)[number];
 
