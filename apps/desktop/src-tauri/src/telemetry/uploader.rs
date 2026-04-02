@@ -54,7 +54,7 @@ impl TelemetryUploader {
             loop {
                 tauri::async_runtime::sleep(Duration::from_millis(current_backoff_ms)).await;
 
-                match uploader.flush_now(&status, &active_session) {
+                match uploader.flush_now(&status, &active_session).await {
                     Ok(_) => {
                         current_backoff_ms = uploader.config.telemetry_flush_interval_ms;
                     }
@@ -71,7 +71,7 @@ impl TelemetryUploader {
         });
     }
 
-    pub fn flush_now(
+    pub async fn flush_now(
         &self,
         status: &Arc<Mutex<TelemetryStatus>>,
         _active_session: &Arc<Mutex<Option<ActiveSessionContext>>>,
@@ -90,11 +90,12 @@ impl TelemetryUploader {
                 self.config.backend_url.trim_end_matches('/')
             ))
             .json(&map_buffered_events_to_batch(&batch))
-            .send();
+            .send()
+            .await;
 
         match response {
             Ok(http_response) if http_response.status().is_success() => {
-                let body: serde_json::Value = http_response.json()?;
+                let body: serde_json::Value = http_response.json().await?;
                 let results = body
                     .get("results")
                     .and_then(|value| value.as_array())

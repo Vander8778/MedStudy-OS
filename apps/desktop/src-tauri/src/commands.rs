@@ -147,12 +147,13 @@ pub fn get_buffer_health(
 }
 
 #[tauri::command]
-pub fn force_flush_telemetry(
+pub async fn force_flush_telemetry(
     state: State<'_, Arc<DesktopCommandState>>,
 ) -> Result<TelemetryStatus, String> {
     state
         .telemetry_runtime
         .force_flush()
+        .await
         .map_err(|error| error.to_string())?;
     Ok(state.telemetry_runtime.get_status())
 }

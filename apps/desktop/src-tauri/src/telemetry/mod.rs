@@ -171,11 +171,12 @@ impl TelemetryRuntime {
         self.inner.buffer.health()
     }
 
-    pub fn force_flush(&self) -> anyhow::Result<()> {
+    pub async fn force_flush(&self) -> anyhow::Result<()> {
         self.ensure_background_tasks_started();
         self.inner
             .uploader
             .flush_now(&self.inner.status, &self.inner.active_session)
+            .await
     }
 
     pub fn get_active_window_info(&self) -> ActiveWindowInfo {
