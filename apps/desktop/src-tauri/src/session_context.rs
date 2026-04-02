@@ -75,3 +75,54 @@ impl SessionContextStore {
 pub fn now_iso_string() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_store() -> (SessionContextStore, PathBuf) {
+        let unique_id = format!(
+            "medstudy-session-context-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock before unix epoch")
+                .as_nanos()
+        );
+        let file_path = std::env::temp_dir().join(unique_id);
+        (
+            SessionContextStore {
+                file_path: file_path.clone(),
+                lock: Arc::new(Mutex::new(())),
+            },
+            file_path,
+        )
+    }
+
+    #[test]
+    fn persists_and_loads_session_context_round_trip() {
+        let (store, file_path) = create_test_store();
+        let context = PersistedSessionContext {
+            session_id: "session_1".to_string(),
+            user_id: "user_1".to_string(),
+            persisted_at: "2026-04-02T10:00:00.000Z".to_string(),
+        };
+
+        store.persist(&context).expect("persist should succeed");
+        let loaded = store.load();
+
+        assert_eq!(loaded, Some(context));
+
+        let _ = fs::remove_file(file_path);
+    }
+
+    #[test]
+    fn malformed_json_is_treated_as_missing_context() {
+        let (store, file_path) = create_test_store();
+        fs::write(&file_path, b"{not-json").expect("test fixture write should succeed");
+
+        assert_eq!(store.load(), None);
+
+        let _ = fs::remove_file(file_path);
+    }
+}

@@ -1,7 +1,10 @@
 import { useEffect, useEffectEvent } from "react";
 import { createApiClient } from "../services/api-client";
 import { forceFlushTelemetry } from "../services/telemetry-bridge";
-import { getSessionPollIntervalMs } from "../services/session-poller";
+import {
+  getSessionPollIntervalMs,
+  shouldFetchReviewData
+} from "../services/session-poller";
 import { useConnectionStore } from "../state/connection-store";
 import {
   getEffectiveSessionState,
@@ -16,6 +19,8 @@ export function useSessionPoller() {
   const setSession = useSessionStore((state) => state.setSession);
   const setScoring = useSessionStore((state) => state.setScoring);
   const setEvents = useSessionStore((state) => state.setEvents);
+  const scoring = useSessionStore((state) => state.scoring);
+  const events = useSessionStore((state) => state.events);
   const connection = useConnectionStore();
 
   const pollOnce = useEffectEvent(async () => {
@@ -32,14 +37,12 @@ export function useSessionPoller() {
       setSession(nextSession);
 
       if (
-        [
-          "review_pending",
-          "completed",
-          "partial",
-          "failed",
-          "penalized",
-          "excused"
-        ].includes(nextSession.session.state)
+        shouldFetchReviewData({
+          previousState: session.session.state,
+          nextState: nextSession.session.state,
+          hasScoring: Boolean(scoring),
+          hasEvents: events.length > 0
+        })
       ) {
         const [scoring, events] = await Promise.all([
           api.getScoring(nextSession.session.id),

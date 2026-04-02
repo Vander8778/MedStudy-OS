@@ -17,7 +17,7 @@ use crate::{
 
 use super::{
     buffer::{BufferedTelemetryEvent, TelemetryBuffer},
-    ActiveSessionContext, TelemetryStatus,
+    ActiveSessionContext, TelemetryCaptureMode, TelemetryStatus,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -89,6 +89,27 @@ impl TelemetryCollector {
                         last_heartbeat_at = now;
                     }
 
+                    if context.capture_mode == TelemetryCaptureMode::HeartbeatOnly {
+                        last_snapshot = None;
+
+                        if let Ok(health) = collector.buffer.health() {
+                            let mut telemetry_status = status.lock().expect("status lock poisoned");
+                            telemetry_status.capturing = true;
+                            telemetry_status.active_session_id = Some(context.session_id);
+                            telemetry_status.active_user_id = Some(context.user_id);
+                            telemetry_status.queued_events = health.pending_events;
+                            telemetry_status.retained_uploaded_events =
+                                health.retained_uploaded_events;
+                            telemetry_status.queue_warning = health.queue_warning;
+                        }
+
+                        tauri::async_runtime::sleep(Duration::from_millis(
+                            collector.config.window_track_interval_ms,
+                        ))
+                        .await;
+                        continue;
+                    }
+
                     let active_window = collector.window_tracker.capture(&collector.config);
                     let idle_snapshot = collector
                         .idle_detector
@@ -99,12 +120,13 @@ impl TelemetryCollector {
                         input_activity: input_activity.clone(),
                         idle: idle_snapshot.is_idle,
                     };
+                    let event_types = collect_snapshot_event_types(
+                        last_snapshot.as_ref(),
+                        &snapshot,
+                        collector.config.enable_input_activity_capture,
+                    );
 
-                    if last_snapshot
-                        .as_ref()
-                        .map(|previous| previous.active_window != active_window)
-                        .unwrap_or(true)
-                    {
+                    if event_types.contains(&"window_changed") {
                         let _ = collector.buffer.insert(&collector.build_event(
                             &context,
                             "window_changed",
@@ -116,11 +138,7 @@ impl TelemetryCollector {
                         ));
                     }
 
-                    if last_snapshot
-                        .as_ref()
-                        .map(|previous| previous.active_window.focused != active_window.focused)
-                        .unwrap_or(true)
-                    {
+                    if event_types.contains(&"focus_changed") {
                         let _ = collector.buffer.insert(&collector.build_event(
                             &context,
                             "focus_changed",
@@ -128,12 +146,7 @@ impl TelemetryCollector {
                         ));
                     }
 
-                    if collector.config.enable_input_activity_capture
-                        && last_snapshot
-                            .as_ref()
-                            .map(|previous| previous.input_activity != input_activity)
-                            .unwrap_or(true)
-                    {
+                    if event_types.contains(&"input_activity") {
                         let _ = collector.buffer.insert(&collector.build_event(
                             &context,
                             "input_activity",
@@ -141,12 +154,7 @@ impl TelemetryCollector {
                         ));
                     }
 
-                    if idle_snapshot.is_idle
-                        && last_snapshot
-                            .as_ref()
-                            .map(|previous| !previous.idle)
-                            .unwrap_or(true)
-                    {
+                    if event_types.contains(&"idle_detected") {
                         let _ = collector.buffer.insert(&collector.build_event(
                             &context,
                             "idle_detected",
@@ -222,6 +230,42 @@ fn map_input_activity(
     }
 }
 
+fn collect_snapshot_event_types(
+    previous: Option<&CollectorSnapshot>,
+    next: &CollectorSnapshot,
+    include_input_activity: bool,
+) -> Vec<&'static str> {
+    let mut event_types = Vec::new();
+
+    if previous
+        .map(|snapshot| snapshot.active_window != next.active_window)
+        .unwrap_or(true)
+    {
+        event_types.push("window_changed");
+    }
+
+    if previous
+        .map(|snapshot| snapshot.active_window.focused != next.active_window.focused)
+        .unwrap_or(true)
+    {
+        event_types.push("focus_changed");
+    }
+
+    if include_input_activity
+        && previous
+            .map(|snapshot| snapshot.input_activity != next.input_activity)
+            .unwrap_or(true)
+    {
+        event_types.push("input_activity");
+    }
+
+    if next.idle && previous.map(|snapshot| !snapshot.idle).unwrap_or(true) {
+        event_types.push("idle_detected");
+    }
+
+    event_types
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +303,42 @@ mod tests {
             ),
             InputActivityLevel::Normal
         );
+    }
+
+    #[test]
+    fn restarting_after_snapshot_reset_emits_fresh_initial_events() {
+        let snapshot = CollectorSnapshot {
+            active_window: ActiveWindowInfo {
+                title: Some("Study Notes".to_string()),
+                process_name: Some("notepad.exe".to_string()),
+                focused: true,
+            },
+            input_activity: InputActivityLevel::Normal,
+            idle: false,
+        };
+
+        let initial_events = collect_snapshot_event_types(None, &snapshot, true);
+        let resumed_events = collect_snapshot_event_types(None, &snapshot, true);
+
+        assert_eq!(
+            initial_events,
+            vec!["window_changed", "focus_changed", "input_activity"]
+        );
+        assert_eq!(resumed_events, initial_events);
+    }
+
+    #[test]
+    fn unchanged_snapshots_do_not_emit_duplicate_events() {
+        let snapshot = CollectorSnapshot {
+            active_window: ActiveWindowInfo {
+                title: Some("Study Notes".to_string()),
+                process_name: Some("notepad.exe".to_string()),
+                focused: true,
+            },
+            input_activity: InputActivityLevel::Normal,
+            idle: false,
+        };
+
+        assert!(collect_snapshot_event_types(Some(&snapshot), &snapshot, true).is_empty());
     }
 }

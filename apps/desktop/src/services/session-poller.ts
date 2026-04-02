@@ -23,3 +23,29 @@ export function getSessionPollIntervalMs(
 export function shouldPollSession(state: SessionState | undefined) {
   return state !== undefined && getSessionPollIntervalMs(state, 5_000) > 0;
 }
+
+export function shouldFetchReviewData(input: {
+  previousState: SessionState | undefined;
+  nextState: SessionState;
+  hasScoring: boolean;
+  hasEvents: boolean;
+}) {
+  const isReviewOrTerminal = [
+    "review_pending",
+    "completed",
+    "partial",
+    "failed",
+    "penalized",
+    "excused"
+  ].includes(input.nextState);
+
+  if (!isReviewOrTerminal) {
+    return false;
+  }
+
+  if (input.previousState !== input.nextState) {
+    return true;
+  }
+
+  return !input.hasScoring || !input.hasEvents;
+}

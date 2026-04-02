@@ -70,6 +70,7 @@ export type ActiveWindowInfo = {
 };
 
 export type ConnectionState = "online" | "degraded" | "offline";
+export type TelemetryCaptureMode = "full" | "heartbeat_only";
 
 export type ScreenKey =
   | "login"
@@ -98,7 +99,22 @@ export function isTerminalSessionState(state: SessionState): boolean {
 }
 
 export function isActiveTelemetryState(state: SessionState): boolean {
-  return state === "active_valid" || state === "active_warning";
+  return getTelemetryCaptureMode(state) !== null;
+}
+
+export function getTelemetryCaptureMode(
+  state: SessionState
+): TelemetryCaptureMode | null {
+  switch (state) {
+    case "active_valid":
+    case "active_warning":
+      return "full";
+    case "paused_valid":
+    case "paused_expired":
+      return "heartbeat_only";
+    default:
+      return null;
+  }
 }
 
 export function getDueCheckpoint(
@@ -114,7 +130,7 @@ export function resolveScreenKey(state?: SessionState): ScreenKey {
 
   switch (state) {
     case "planned":
-      return "session-select";
+      return "arming";
     case "arming":
     case "armed":
       return "arming";

@@ -4,6 +4,7 @@ import type {
   BufferHealth,
   DesktopConfig,
   PersistedSessionContext,
+  TelemetryCaptureMode,
   TelemetryStatus
 } from "../types";
 
@@ -76,14 +77,19 @@ export async function clearPersistedSessionContext() {
   await invoke("clear_persisted_session_context");
 }
 
-export async function startTelemetryCapture(sessionId: string, userId: string) {
+export async function startTelemetryCapture(
+  sessionId: string,
+  userId: string,
+  captureMode: TelemetryCaptureMode = "full"
+) {
   if (!hasTauriRuntime()) {
     return defaultTelemetryStatus;
   }
 
   return invoke<TelemetryStatus>("start_telemetry_capture", {
     sessionId,
-    userId
+    userId,
+    captureMode
   });
 }
 

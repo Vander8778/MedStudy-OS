@@ -33,13 +33,18 @@ impl TelemetryUploader {
         config: DesktopConfig,
         buffer: TelemetryBuffer,
         session_context_store: SessionContextStore,
-    ) -> Self {
-        Self {
+    ) -> anyhow::Result<Self> {
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(15))
+            .build()?;
+
+        Ok(Self {
             config,
             buffer,
-            client: reqwest::Client::new(),
+            client,
             session_context_store,
-        }
+        })
     }
 
     pub fn spawn(
@@ -62,8 +67,10 @@ impl TelemetryUploader {
                         let mut telemetry_status = status.lock().expect("status lock poisoned");
                         telemetry_status.last_error = Some(error.to_string());
                         telemetry_status.consecutive_failure_count += 1;
-                        current_backoff_ms = (current_backoff_ms * 2)
-                            .min(uploader.config.telemetry_flush_interval_ms * 12);
+                        current_backoff_ms = next_backoff_ms(
+                            current_backoff_ms,
+                            uploader.config.telemetry_flush_interval_ms,
+                        );
                         telemetry_status.next_retry_in_ms = current_backoff_ms;
                     }
                 }
@@ -162,6 +169,13 @@ fn collect_terminal_ids(
     batch: &[BufferedTelemetryEvent],
     results: &[serde_json::Value],
 ) -> Vec<String> {
+    if results.is_empty() {
+        return batch
+            .iter()
+            .map(|event| event.client_event_id.clone())
+            .collect();
+    }
+
     let mut terminal_ids = Vec::new();
 
     for event in batch {
@@ -183,6 +197,10 @@ fn collect_terminal_ids(
     }
 
     terminal_ids
+}
+
+fn next_backoff_ms(current_backoff_ms: u64, base_backoff_ms: u64) -> u64 {
+    (current_backoff_ms * 2).min(base_backoff_ms * 12)
 }
 
 #[cfg(test)]
@@ -214,5 +232,20 @@ mod tests {
         );
 
         assert_eq!(ids, vec!["one".to_string(), "two".to_string()]);
+    }
+
+    #[test]
+    fn treats_empty_results_as_full_acceptance_for_successful_batches() {
+        let ids = collect_terminal_ids(&[event("one"), event("two")], &[]);
+
+        assert_eq!(ids, vec!["one".to_string(), "two".to_string()]);
+    }
+
+    #[test]
+    fn doubles_backoff_until_the_cap() {
+        assert_eq!(next_backoff_ms(10_000, 10_000), 20_000);
+        assert_eq!(next_backoff_ms(20_000, 10_000), 40_000);
+        assert_eq!(next_backoff_ms(80_000, 10_000), 120_000);
+        assert_eq!(next_backoff_ms(120_000, 10_000), 120_000);
     }
 }

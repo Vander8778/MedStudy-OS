@@ -24,7 +24,7 @@ import {
   shouldPersistSessionContext,
   useSessionStore
 } from "../state/session-store";
-import { isActiveTelemetryState, isTerminalSessionState } from "../types";
+import { getTelemetryCaptureMode, isTerminalSessionState } from "../types";
 
 export function useSessionLifecycle() {
   const sessionStore = useSessionStore();
@@ -38,15 +38,17 @@ export function useSessionLifecycle() {
 
   useEffect(() => {
     async function hydrate() {
+      const sessionStoreApi = useSessionStore.getState();
+      const connectionStoreApi = useConnectionStore.getState();
       const [config, persistedContext] = await Promise.all([
         getDesktopConfig(),
         getPersistedSessionContext()
       ]);
-      sessionStore.setConfig(config);
+      sessionStoreApi.setConfig(config);
 
       const storedAuth = readStoredAuthSession();
       if (storedAuth) {
-        sessionStore.setAuth(storedAuth);
+        sessionStoreApi.setAuth(storedAuth);
       }
 
       if (persistedContext && storedAuth) {
@@ -56,12 +58,12 @@ export function useSessionLifecycle() {
         });
         try {
           const session = await api.getSession(persistedContext.sessionId);
-          sessionStore.setSession(session);
+          sessionStoreApi.setSession(session);
           if (isTerminalSessionState(session.session.state)) {
             await clearPersistedSessionContext();
           }
         } catch (error) {
-          connection.recordFailure(
+          connectionStoreApi.recordFailure(
             error instanceof Error ? error.message : "Failed to restore session."
           );
         }
@@ -69,7 +71,7 @@ export function useSessionLifecycle() {
     }
 
     void hydrate();
-  }, [connection, sessionStore]);
+  }, []);
 
   useEffect(() => {
     async function syncSessionContext() {
@@ -99,8 +101,9 @@ export function useSessionLifecycle() {
         return;
       }
 
-      if (isActiveTelemetryState(session.state)) {
-        await startTelemetryCapture(session.id, auth.user.id);
+      const captureMode = getTelemetryCaptureMode(session.state);
+      if (captureMode) {
+        await startTelemetryCapture(session.id, auth.user.id, captureMode);
       } else {
         await stopTelemetryCapture();
       }

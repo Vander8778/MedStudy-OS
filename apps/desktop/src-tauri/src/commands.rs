@@ -7,7 +7,10 @@ use uuid::Uuid;
 use crate::{
     config::DesktopConfig,
     session_context::{now_iso_string, PersistedSessionContext, SessionContextStore},
-    telemetry::{ActiveSessionContext, BufferHealth, TelemetryRuntime, TelemetryStatus},
+    telemetry::{
+        ActiveSessionContext, BufferHealth, TelemetryCaptureMode, TelemetryRuntime,
+        TelemetryStatus,
+    },
 };
 
 pub struct DesktopCommandState {
@@ -109,11 +112,16 @@ pub fn clear_persisted_session_context(
 pub fn start_telemetry_capture(
     session_id: String,
     user_id: String,
+    capture_mode: Option<TelemetryCaptureMode>,
     state: State<'_, Arc<DesktopCommandState>>,
 ) -> Result<TelemetryStatus, String> {
     state
         .telemetry_runtime
-        .start_capture(ActiveSessionContext { session_id, user_id })
+        .start_capture(ActiveSessionContext {
+            session_id,
+            user_id,
+            capture_mode: capture_mode.unwrap_or(TelemetryCaptureMode::Full),
+        })
         .map_err(|error| error.to_string())?;
     Ok(state.telemetry_runtime.get_status())
 }

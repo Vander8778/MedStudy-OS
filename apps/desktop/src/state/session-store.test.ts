@@ -131,10 +131,48 @@ describe("session store helpers", () => {
             role: "student"
           }
         },
+        session: createSession("planned"),
+        optimisticState: undefined
+      } as never)
+    ).toBe("arming");
+    expect(
+      getCurrentScreen({
+        auth: {
+          token: "stub",
+          user: {
+            id: "user_1",
+            email: "demo@medstudy.local",
+            role: "student"
+          }
+        },
         session: createSession("penalized"),
         optimisticState: undefined
       } as never)
     ).toBe("completed");
+  });
+
+  it("reconciles a polled backend state change into a new screen", () => {
+    useSessionStore.setState({
+      ...useSessionStore.getState(),
+      auth: {
+        token: "stub",
+        user: {
+          id: "user_1",
+          email: "demo@medstudy.local",
+          role: "student"
+        }
+      },
+      session: createSession("active_valid") as never,
+      optimisticState: undefined
+    });
+
+    expect(getCurrentScreen(useSessionStore.getState() as never)).toBe("active");
+
+    useSessionStore.getState().setSession(createSession("review_pending") as never);
+    expect(getCurrentScreen(useSessionStore.getState() as never)).toBe("review");
+
+    useSessionStore.getState().setSession(createSession("completed") as never);
+    expect(getCurrentScreen(useSessionStore.getState() as never)).toBe("completed");
   });
 
   it("surfaces due checkpoints from the backend snapshot", () => {

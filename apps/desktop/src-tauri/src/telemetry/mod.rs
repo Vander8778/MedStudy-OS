@@ -30,6 +30,14 @@ use self::{
 pub struct ActiveSessionContext {
     pub session_id: String,
     pub user_id: String,
+    pub capture_mode: TelemetryCaptureMode,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TelemetryCaptureMode {
+    Full,
+    HeartbeatOnly,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,7 +106,8 @@ impl TelemetryRuntime {
             Arc::new(WindowTracker::default()),
             Arc::new(IdleDetector::default()),
         );
-        let uploader = TelemetryUploader::new(config, buffer.clone(), session_context_store);
+        let uploader = TelemetryUploader::new(config, buffer.clone(), session_context_store)
+            .map_err(|error| tauri::Error::Anyhow(anyhow::anyhow!(error.to_string())))?;
 
         Ok(Self {
             inner: Arc::new(TelemetryRuntimeInner {
