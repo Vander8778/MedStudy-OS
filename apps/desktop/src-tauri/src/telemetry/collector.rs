@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::{
@@ -103,7 +104,7 @@ impl TelemetryCollector {
                             telemetry_status.queue_warning = health.queue_warning;
                         }
 
-                        tauri::async_runtime::sleep(Duration::from_millis(
+                        sleep(Duration::from_millis(
                             collector.config.window_track_interval_ms,
                         ))
                         .await;
@@ -184,7 +185,7 @@ impl TelemetryCollector {
                     telemetry_status.active_user_id = None;
                 }
 
-                tauri::async_runtime::sleep(Duration::from_millis(
+                sleep(Duration::from_millis(
                     collector.config.window_track_interval_ms,
                 ))
                 .await;

@@ -38,7 +38,7 @@ mod platform {
     pub fn capture_active_window(config: &DesktopConfig) -> ActiveWindowInfo {
         unsafe {
             let window = GetForegroundWindow();
-            if window == 0 {
+            if window.is_null() {
                 return ActiveWindowInfo::default();
             }
 
@@ -84,13 +84,13 @@ mod platform {
         }
 
         let process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, process_id);
-        if process == 0 {
+        if process.is_null() {
             return None;
         }
 
         let mut buffer = vec![0_u16; 260];
         let length =
-            K32GetModuleBaseNameW(process, 0, buffer.as_mut_ptr(), buffer.len() as u32);
+            K32GetModuleBaseNameW(process, std::ptr::null_mut(), buffer.as_mut_ptr(), buffer.len() as u32);
         CloseHandle(process);
 
         if length == 0 {

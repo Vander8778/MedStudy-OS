@@ -352,7 +352,9 @@ mod tests {
     fn prunes_uploaded_before_pending_when_overflowing() {
         let buffer = test_buffer(2);
         let mut uploaded = event(1);
-        uploaded.uploaded_at = Some("2026-04-02T10:10:00.000Z".to_string());
+        uploaded.uploaded_at = Some(
+            chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+        );
         buffer.insert(&uploaded).unwrap();
         buffer.insert(&event(2)).unwrap();
         buffer.insert(&event(3)).unwrap();

@@ -4,6 +4,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 
 use crate::{config::DesktopConfig, session_context::{now_iso_string, SessionContextStore}};
 
@@ -57,7 +58,7 @@ impl TelemetryUploader {
             let mut current_backoff_ms = uploader.config.telemetry_flush_interval_ms;
 
             loop {
-                tauri::async_runtime::sleep(Duration::from_millis(current_backoff_ms)).await;
+                sleep(Duration::from_millis(current_backoff_ms)).await;
 
                 match uploader.flush_now(&status, &active_session).await {
                     Ok(_) => {

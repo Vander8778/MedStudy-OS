@@ -8,7 +8,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::{
     config::DesktopConfig,
@@ -20,7 +20,7 @@ use crate::{
 };
 
 use self::{
-    buffer::{BufferHealth, BufferedTelemetryEvent, TelemetryBuffer},
+    buffer::{BufferedTelemetryEvent, TelemetryBuffer},
     collector::TelemetryCollector,
     uploader::TelemetryUploader,
 };
@@ -229,7 +229,7 @@ fn resolve_app_data_path(app_handle: &AppHandle) -> tauri::Result<PathBuf> {
     let base = app_handle
         .path()
         .app_data_dir()
-        .map_err(|error| tauri::Error::Anyhow(anyhow::anyhow!(error.to_string())))?;
+        .map_err(|error: tauri::Error| tauri::Error::Anyhow(anyhow::anyhow!(error.to_string())))?;
     std::fs::create_dir_all(&base)
         .map_err(|error| tauri::Error::Anyhow(anyhow::anyhow!(error.to_string())))?;
     Ok(base)
