@@ -21,6 +21,7 @@ describe("desktop UI components", () => {
           capturing: true,
           queuedEvents: 12,
           retainedUploadedEvents: 4,
+          discardedEvents: 2,
           consecutiveFailureCount: 0,
           nextRetryInMs: 10_000,
           queueWarning: false
@@ -39,6 +40,7 @@ describe("desktop UI components", () => {
 
     expect(markup).toContain("12 queued");
     expect(markup).toContain("Retained uploaded: 4");
+    expect(markup).toContain("Discarded events: 2");
   });
 
   it("renders checkpoint prompts only when backend marks one as due", () => {

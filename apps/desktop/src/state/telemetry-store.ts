@@ -13,6 +13,7 @@ export const useTelemetryStore = create<TelemetryStore>((set) => ({
     capturing: false,
     queuedEvents: 0,
     retainedUploadedEvents: 0,
+    discardedEvents: 0,
     consecutiveFailureCount: 0,
     nextRetryInMs: 0,
     queueWarning: false

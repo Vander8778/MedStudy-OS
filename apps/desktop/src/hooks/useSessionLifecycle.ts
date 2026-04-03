@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type {
   RequestReviewRequest,
   ResumeSessionRequest,
@@ -19,16 +19,22 @@ import {
   startTelemetryCapture,
   stopTelemetryCapture
 } from "../services/telemetry-bridge";
-import { useConnectionStore } from "../state/connection-store";
 import {
-  shouldPersistSessionContext,
-  useSessionStore
-} from "../state/session-store";
-import { getTelemetryCaptureMode, isTerminalSessionState } from "../types";
+  getSessionContextSyncDecision,
+  getTelemetrySyncDecision
+} from "../services/session-lifecycle";
+import { useConnectionStore } from "../state/connection-store";
+import { useSessionStore } from "../state/session-store";
+import { isTerminalSessionState } from "../types";
 
 export function useSessionLifecycle() {
   const sessionStore = useSessionStore();
   const connection = useConnectionStore();
+  const authUserId = useSessionStore((state) => state.auth?.user.id);
+  const sessionId = useSessionStore((state) => state.session?.session.id);
+  const sessionState = useSessionStore((state) => state.session?.session.state);
+  const sessionUserId = useSessionStore((state) => state.session?.session.userId);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   const requireOnline = useEffectEvent(() => {
     if (connection.state === "offline") {
@@ -40,33 +46,37 @@ export function useSessionLifecycle() {
     async function hydrate() {
       const sessionStoreApi = useSessionStore.getState();
       const connectionStoreApi = useConnectionStore.getState();
-      const [config, persistedContext] = await Promise.all([
-        getDesktopConfig(),
-        getPersistedSessionContext()
-      ]);
-      sessionStoreApi.setConfig(config);
+      try {
+        const [config, persistedContext] = await Promise.all([
+          getDesktopConfig(),
+          getPersistedSessionContext()
+        ]);
+        sessionStoreApi.setConfig(config);
 
-      const storedAuth = readStoredAuthSession();
-      if (storedAuth) {
-        sessionStoreApi.setAuth(storedAuth);
-      }
-
-      if (persistedContext && storedAuth) {
-        const api = createApiClient({
-          backendUrl: config.backendUrl,
-          token: storedAuth.token
-        });
-        try {
-          const session = await api.getSession(persistedContext.sessionId);
-          sessionStoreApi.setSession(session);
-          if (isTerminalSessionState(session.session.state)) {
-            await clearPersistedSessionContext();
-          }
-        } catch (error) {
-          connectionStoreApi.recordFailure(
-            error instanceof Error ? error.message : "Failed to restore session."
-          );
+        const storedAuth = readStoredAuthSession();
+        if (storedAuth) {
+          sessionStoreApi.setAuth(storedAuth);
         }
+
+        if (persistedContext && storedAuth) {
+          const api = createApiClient({
+            backendUrl: config.backendUrl,
+            token: storedAuth.token
+          });
+          try {
+            const session = await api.getSession(persistedContext.sessionId);
+            sessionStoreApi.setSession(session);
+            if (isTerminalSessionState(session.session.state)) {
+              await clearPersistedSessionContext();
+            }
+          } catch (error) {
+            connectionStoreApi.recordFailure(
+              error instanceof Error ? error.message : "Failed to restore session."
+            );
+          }
+        }
+      } finally {
+        setIsHydrated(true);
       }
     }
 
@@ -75,42 +85,51 @@ export function useSessionLifecycle() {
 
   useEffect(() => {
     async function syncSessionContext() {
-      if (!sessionStore.session || !sessionStore.auth) {
+      const decision = getSessionContextSyncDecision({
+        isHydrated,
+        authUserId,
+        sessionId,
+        sessionUserId,
+        sessionState
+      });
+
+      if (decision.action === "skip") {
+        return;
+      }
+
+      if (decision.action === "clear") {
         await clearPersistedSessionContext();
         return;
       }
 
-      const session = sessionStore.session.session;
-      if (shouldPersistSessionContext(session)) {
-        await persistSessionContext(session.id, session.userId);
-      } else {
-        await clearPersistedSessionContext();
-      }
+      await persistSessionContext(decision.sessionId, decision.userId);
     }
 
     void syncSessionContext();
-  }, [sessionStore.auth, sessionStore.session]);
+  }, [authUserId, isHydrated, sessionId, sessionState, sessionUserId]);
 
   useEffect(() => {
     async function syncTelemetry() {
-      const session = sessionStore.session?.session;
-      const auth = sessionStore.auth;
+      const decision = getTelemetrySyncDecision({
+        authUserId,
+        sessionId,
+        sessionState
+      });
 
-      if (!session || !auth) {
+      if (decision.action === "stop") {
         await stopTelemetryCapture();
         return;
       }
 
-      const captureMode = getTelemetryCaptureMode(session.state);
-      if (captureMode) {
-        await startTelemetryCapture(session.id, auth.user.id, captureMode);
-      } else {
-        await stopTelemetryCapture();
-      }
+      await startTelemetryCapture(
+        decision.sessionId,
+        decision.userId,
+        decision.captureMode
+      );
     }
 
     void syncTelemetry();
-  }, [sessionStore.auth, sessionStore.session]);
+  }, [authUserId, sessionId, sessionState]);
 
   function getApi() {
     if (!sessionStore.config || !sessionStore.auth) {

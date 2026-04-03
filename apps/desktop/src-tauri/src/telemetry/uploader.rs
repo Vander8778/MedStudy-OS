@@ -13,6 +13,8 @@ use super::{
     map_buffered_events_to_batch, ActiveSessionContext, TelemetryStatus,
 };
 
+const MAX_UPLOAD_ATTEMPTS: u32 = 10;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct UploadOutcome {
@@ -84,6 +86,8 @@ impl TelemetryUploader {
         status: &Arc<Mutex<TelemetryStatus>>,
         _active_session: &Arc<Mutex<Option<ActiveSessionContext>>>,
     ) -> anyhow::Result<()> {
+        self.discard_exhausted_pending(status)?;
+
         let batch = self.buffer.pending_batch(50)?;
         if batch.is_empty() {
             let mut telemetry_status = status.lock().expect("status lock poisoned");
@@ -127,6 +131,7 @@ impl TelemetryUploader {
                 self.buffer.mark_uploaded(&client_event_ids, &now_iso_string())?;
 
                 let mut telemetry_status = status.lock().expect("status lock poisoned");
+                telemetry_status.discarded_events += client_event_ids.len() as u64;
                 telemetry_status.last_error = Some(format!(
                     "Telemetry batch rejected with status {}.",
                     http_response.status()
@@ -140,6 +145,7 @@ impl TelemetryUploader {
                     .map(|event| event.client_event_id.clone())
                     .collect::<Vec<_>>();
                 self.buffer.increment_attempts(&client_event_ids)?;
+                self.discard_exhausted_pending(status)?;
                 anyhow::bail!("Telemetry batch failed with status {}.", http_response.status());
             }
             Err(error) => {
@@ -148,6 +154,7 @@ impl TelemetryUploader {
                     .map(|event| event.client_event_id.clone())
                     .collect::<Vec<_>>();
                 self.buffer.increment_attempts(&client_event_ids)?;
+                self.discard_exhausted_pending(status)?;
                 anyhow::bail!("Telemetry batch upload failed: {error}");
             }
         }
@@ -163,6 +170,23 @@ impl TelemetryUploader {
         }
 
         Ok(())
+    }
+
+    fn discard_exhausted_pending(
+        &self,
+        status: &Arc<Mutex<TelemetryStatus>>,
+    ) -> anyhow::Result<usize> {
+        let discarded_count = self.buffer.discard_pending_at_or_above_attempts(
+            MAX_UPLOAD_ATTEMPTS,
+            &now_iso_string(),
+        )?;
+
+        if discarded_count > 0 {
+            let mut telemetry_status = status.lock().expect("status lock poisoned");
+            telemetry_status.discarded_events += discarded_count as u64;
+        }
+
+        Ok(discarded_count)
     }
 }
 

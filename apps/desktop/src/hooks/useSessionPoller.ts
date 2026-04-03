@@ -6,15 +6,13 @@ import {
   shouldFetchReviewData
 } from "../services/session-poller";
 import { useConnectionStore } from "../state/connection-store";
-import {
-  getEffectiveSessionState,
-  useSessionStore
-} from "../state/session-store";
+import { useSessionStore } from "../state/session-store";
 
 export function useSessionPoller() {
   const config = useSessionStore((state) => state.config);
   const auth = useSessionStore((state) => state.auth);
-  const session = useSessionStore((state) => state.session);
+  const sessionId = useSessionStore((state) => state.session?.session.id);
+  const sessionState = useSessionStore((state) => state.session?.session.state);
   const optimisticState = useSessionStore((state) => state.optimisticState);
   const setSession = useSessionStore((state) => state.setSession);
   const setScoring = useSessionStore((state) => state.setScoring);
@@ -24,7 +22,9 @@ export function useSessionPoller() {
   const connection = useConnectionStore();
 
   const pollOnce = useEffectEvent(async () => {
-    if (!config || !auth || !session) {
+    const currentSession = useSessionStore.getState().session;
+
+    if (!config || !auth || !sessionId || !currentSession) {
       return;
     }
 
@@ -33,20 +33,20 @@ export function useSessionPoller() {
         backendUrl: config.backendUrl,
         token: auth.token
       });
-      const nextSession = await api.getSession(session.session.id);
+      const nextSession = await api.getSession(sessionId);
       setSession(nextSession);
 
       if (
         shouldFetchReviewData({
-          previousState: session.session.state,
+          previousState: currentSession.session.state,
           nextState: nextSession.session.state,
           hasScoring: Boolean(scoring),
           hasEvents: events.length > 0
         })
       ) {
         const [scoring, events] = await Promise.all([
-          api.getScoring(nextSession.session.id),
-          api.getEvents(nextSession.session.id)
+          api.getScoring(sessionId),
+          api.getEvents(sessionId)
         ]);
         setScoring(scoring.scoring);
         setEvents(events.events);
@@ -64,13 +64,13 @@ export function useSessionPoller() {
   });
 
   useEffect(() => {
-    const effectiveState = getEffectiveSessionState(session, optimisticState);
+    const effectiveState = optimisticState ?? sessionState;
     const intervalMs = getSessionPollIntervalMs(
       effectiveState,
       config?.pollIntervalMs ?? 5_000
     );
 
-    if (!session || !config || !auth || intervalMs <= 0) {
+    if (!sessionId || !config || !auth || intervalMs <= 0) {
       return;
     }
 
@@ -82,5 +82,5 @@ export function useSessionPoller() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [auth, config, optimisticState, pollOnce, session]);
+  }, [auth, config, optimisticState, pollOnce, sessionId, sessionState]);
 }

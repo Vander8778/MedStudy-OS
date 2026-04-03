@@ -46,6 +46,7 @@ export type TelemetryStatus = {
   activeUserId?: string;
   queuedEvents: number;
   retainedUploadedEvents: number;
+  discardedEvents: number;
   lastFlushAt?: string;
   consecutiveFailureCount: number;
   nextRetryInMs: number;

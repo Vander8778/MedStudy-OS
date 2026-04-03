@@ -176,6 +176,24 @@ impl TelemetryBuffer {
         Ok(())
     }
 
+    pub fn discard_pending_at_or_above_attempts(
+        &self,
+        max_attempts: u32,
+        discarded_at: &str,
+    ) -> anyhow::Result<usize> {
+        let connection = self.connection.lock().expect("buffer connection lock poisoned");
+        let affected = connection.execute(
+            r#"
+            UPDATE telemetry_buffer
+            SET uploaded_at = ?2
+            WHERE uploaded_at IS NULL AND upload_attempts >= ?1
+            "#,
+            params![max_attempts, discarded_at],
+        )?;
+
+        Ok(affected)
+    }
+
     pub fn health(&self) -> anyhow::Result<BufferHealth> {
         let connection = self.connection.lock().expect("buffer connection lock poisoned");
         let total_events =
@@ -395,5 +413,30 @@ mod tests {
         }
 
         assert_eq!(buffer.pending_batch(20).unwrap().len(), 10);
+    }
+
+    #[test]
+    fn discards_pending_events_that_exceed_the_attempt_threshold() {
+        let buffer = test_buffer(10);
+        let mut exhausted = event(1);
+        exhausted.upload_attempts = 10;
+        let mut retryable = event(2);
+        retryable.upload_attempts = 9;
+
+        buffer.insert(&exhausted).unwrap();
+        buffer.insert(&retryable).unwrap();
+
+        let discarded = buffer
+            .discard_pending_at_or_above_attempts(
+                10,
+                &chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            )
+            .unwrap();
+
+        assert_eq!(discarded, 1);
+
+        let health = buffer.health().unwrap();
+        assert_eq!(health.pending_events, 1);
+        assert_eq!(health.retained_uploaded_events, 1);
     }
 }

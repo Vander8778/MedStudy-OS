@@ -26,6 +26,11 @@ export function TelemetryStatusBadge({
         Retained uploaded: {bufferHealth.retainedUploadedEvents} • Next flush in{" "}
         {status.nextRetryInMs}ms
       </span>
+      {status.discardedEvents > 0 ? (
+        <span style={{ fontSize: "0.85rem" }}>
+          Discarded events: {status.discardedEvents}
+        </span>
+      ) : null}
     </div>
   );
 }
