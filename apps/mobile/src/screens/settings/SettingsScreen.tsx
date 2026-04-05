@@ -4,24 +4,26 @@ import { useAuthStore } from "../../state/auth-store";
 import { useNotificationStore } from "../../state/notification-store";
 
 export function SettingsScreen() {
-  const auth = useAuthStore();
-  const notifications = useNotificationStore();
+  const session = useAuthStore((state) => state.session);
+  const signOut = useAuthStore((state) => state.signOut);
+  const preferences = useNotificationStore((state) => state.preferences);
+  const auth = { session };
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 16 }}>
       <Text style={{ fontSize: 26, fontWeight: "800", color: "#0f172a" }}>Settings</Text>
       <View style={{ gap: 4 }}>
         <Text style={{ fontWeight: "700", color: "#0f172a" }}>
-          {auth.session?.profile?.displayName ?? auth.session?.user.email ?? "Unknown user"}
+          {session?.profile?.displayName ?? session?.user.email ?? "Unknown user"}
         </Text>
         <Text style={{ color: "#475569" }}>
           {auth.session?.profile?.timezone ?? "Timezone unavailable"} ·{" "}
-          {auth.session?.profile?.locale ?? "Locale unavailable"}
+          {session?.profile?.locale ?? "Locale unavailable"}
         </Text>
       </View>
       <View style={{ gap: 8 }}>
         <Text style={{ fontWeight: "700", color: "#0f172a" }}>Notifications</Text>
-        {Object.entries(notifications.preferences).map(([key, enabled]) => (
+        {Object.entries(preferences).map(([key, enabled]) => (
           <Text key={key} style={{ color: "#334155" }}>
             {key}: {enabled ? "on" : "off"}
           </Text>
@@ -29,7 +31,7 @@ export function SettingsScreen() {
       </View>
       <Text style={{ color: "#475569" }}>App version: {APP_VERSION}</Text>
       <Pressable
-        onPress={() => void auth.signOut()}
+        onPress={() => void signOut()}
         style={{
           padding: 16,
           borderRadius: 14,
