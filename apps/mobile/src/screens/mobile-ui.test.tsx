@@ -3,7 +3,8 @@ import {
   getAvatarStatusLabel,
   getHomeScreenSections,
   getOfflineBannerMessage,
-  getSessionDetailSections
+  getSessionDetailSections,
+  getVivaConnectivityMessage
 } from "../utils/screen-models";
 
 const homeSummary = {
@@ -171,6 +172,10 @@ describe("mobile UI content", () => {
 
   it("builds offline and avatar labels clearly", () => {
     expect(getOfflineBannerMessage(false)).toContain("Offline mode");
+    expect(getVivaConnectivityMessage(false)).toContain(
+      "Viva answers are never queued offline"
+    );
+    expect(getVivaConnectivityMessage(true)).toBeNull();
     expect(
       getAvatarStatusLabel({
         avatar: {

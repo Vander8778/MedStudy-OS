@@ -36,6 +36,14 @@ export function getOfflineBannerMessage(
     : "Offline mode: safe actions may queue, but live session truth still comes from the backend.";
 }
 
+export function getVivaConnectivityMessage(isOnline: boolean) {
+  if (isOnline) {
+    return null;
+  }
+
+  return "Viva answers are never queued offline. Reconnect to continue.";
+}
+
 export function getAvatarStatusLabel(item: AvatarCatalogItem) {
   if (!item.unlocked) {
     return item.hint ?? "Locked";

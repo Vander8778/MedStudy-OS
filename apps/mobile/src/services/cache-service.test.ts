@@ -64,4 +64,46 @@ describe("cache service", () => {
     expect(failures[0]?.retryCount).toBe(1);
     expect((await getQueuedActions()).length).toBe(1);
   });
+
+  it("processes artifact and avatar queued actions through their processors", async () => {
+    await queueAction({
+      id: "artifact_1",
+      type: "artifact_submit",
+      payload: {
+        sessionId: "session_1",
+        artifact: {
+          type: "note",
+          title: "Reflection",
+          source: "manual_entry",
+          status: "submitted"
+        }
+      },
+      queuedAt: "2026-04-05T11:00:00.000Z",
+      status: "pending",
+      retryCount: 0
+    });
+    await queueAction({
+      id: "avatar_1",
+      type: "avatar_equip",
+      payload: {
+        avatarId: "avatar_7"
+      },
+      queuedAt: "2026-04-05T11:05:00.000Z",
+      status: "pending",
+      retryCount: 0
+    });
+
+    const artifactProcessor = vi.fn(async () => {});
+    const avatarProcessor = vi.fn(async () => {});
+
+    const failures = await processQueuedActions({
+      artifact_submit: artifactProcessor,
+      avatar_equip: avatarProcessor
+    });
+
+    expect(failures).toEqual([]);
+    expect(artifactProcessor).toHaveBeenCalledTimes(1);
+    expect(avatarProcessor).toHaveBeenCalledTimes(1);
+    expect(await getQueuedActions()).toEqual([]);
+  });
 });

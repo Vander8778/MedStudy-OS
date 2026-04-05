@@ -1,39 +1,29 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
-import { createApiClient } from "../../services/api-client";
-import { MOBILE_API_BASE_URL } from "../../utils/constants";
+import { getMobileApiClient } from "../../services/mobile-api";
 import { useNotificationStore } from "../../state/notification-store";
-import { useAuthStore } from "../../state/auth-store";
 import type { SessionStackParamList } from "../../types/navigation";
 import type { VivaSummary } from "../../types/app";
+import { getVivaConnectivityMessage } from "../../utils/screen-models";
 
 export function VivaScreen() {
   const route = useRoute<RouteProp<SessionStackParamList, "Viva">>();
   const isOnline = useNotificationStore((state) => state.isOnline);
-  const setSession = useAuthStore((state) => state.setSession);
   const [viva, setViva] = useState<VivaSummary | null>(null);
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string>();
-
-  const client = useMemo(
-    () =>
-      createApiClient({
-        backendUrl: MOBILE_API_BASE_URL,
-        getAuthSession: async () => useAuthStore.getState().session,
-        onAuthSession: async (session) => {
-          setSession(session);
-        }
-      }),
-    [setSession]
-  );
+  const client = getMobileApiClient();
+  const connectivityMessage = getVivaConnectivityMessage(isOnline);
 
   useEffect(() => {
     if (!isOnline) {
       return;
     }
 
+    // Viva is intentionally kept screen-local for MVP because it is conversational,
+    // connectivity-bound, and not yet reused across tabs or offline cache surfaces.
     void client
       .getViva(route.params.sessionId)
       .then(setViva)
@@ -56,11 +46,7 @@ export function VivaScreen() {
   return (
     <View style={{ flex: 1, padding: 16, gap: 16 }}>
       <Text style={{ fontSize: 24, fontWeight: "800", color: "#0f172a" }}>Viva</Text>
-      {!isOnline ? (
-        <Text style={{ color: "#b91c1c" }}>
-          Viva answers are never queued offline. Reconnect to continue.
-        </Text>
-      ) : null}
+      {connectivityMessage ? <Text style={{ color: "#b91c1c" }}>{connectivityMessage}</Text> : null}
       {viva?.nextPrompt ? <Text style={{ color: "#0f172a" }}>{viva.nextPrompt}</Text> : null}
       <Text style={{ color: "#475569" }}>
         {viva?.notes ?? "The backend controls viva availability and evaluation."}

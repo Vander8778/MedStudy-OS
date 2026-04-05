@@ -1,6 +1,5 @@
 import type { ProgressSummary } from "@medstudy/contracts";
 import { create } from "zustand";
-import { createApiClient } from "../services/api-client";
 import {
   CACHE_KEYS,
   getCacheFreshness,
@@ -8,9 +7,8 @@ import {
   readCacheEntry,
   writeCacheEntry
 } from "../services/cache-service";
-import { MOBILE_API_BASE_URL } from "../utils/constants";
+import { getMobileApiClient } from "../services/mobile-api";
 import type { AvatarCatalogItem, ProgressResponse } from "../types/app";
-import { useAuthStore } from "./auth-store";
 
 type GamificationStore = {
   progress: ProgressSummary | null;
@@ -24,16 +22,6 @@ type GamificationStore = {
   equipAvatar: (avatarId: string, isOnline?: boolean) => Promise<void>;
   invalidate: () => void;
 };
-
-function getClient() {
-  return createApiClient({
-    backendUrl: MOBILE_API_BASE_URL,
-    getAuthSession: async () => useAuthStore.getState().session,
-    onAuthSession: async (session) => {
-      useAuthStore.getState().setSession(session);
-    }
-  });
-}
 
 function newQueueId() {
   return globalThis.crypto?.randomUUID?.() ?? `queue_${Date.now()}_${Math.random()}`;
@@ -50,7 +38,7 @@ export const useGamificationStore = create<GamificationStore>((set) => ({
   async fetchProgress() {
     set({ isLoading: true, error: undefined });
     try {
-      const response = await getClient().getProgress();
+      const response = await getMobileApiClient().getProgress();
       await writeCacheEntry(CACHE_KEYS.progress, response);
       set({
         progress: response.progress,
@@ -99,7 +87,7 @@ export const useGamificationStore = create<GamificationStore>((set) => ({
     const previous = useGamificationStore.getState().equippedAvatarId;
     set({ equippedAvatarId: avatarId });
     try {
-      await getClient().equipAvatar(avatarId);
+      await getMobileApiClient().equipAvatar(avatarId);
       await useGamificationStore.getState().fetchProgress();
     } catch (error) {
       set({ equippedAvatarId: previous });

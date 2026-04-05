@@ -2,13 +2,29 @@ import { useEffect } from "react";
 import { useAuthStore } from "../state/auth-store";
 
 export function useAuth() {
-  const store = useAuthStore();
+  const session = useAuthStore((state) => state.session);
+  const isHydrating = useAuthStore((state) => state.isHydrating);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const error = useAuthStore((state) => state.error);
+  const hydrate = useAuthStore((state) => state.hydrate);
+  const signIn = useAuthStore((state) => state.signIn);
+  const signOut = useAuthStore((state) => state.signOut);
+  const setSession = useAuthStore((state) => state.setSession);
 
   useEffect(() => {
-    if (!store.session && !store.isHydrating) {
-      void store.hydrate();
+    if (!session && !isHydrating) {
+      void hydrate();
     }
-  }, [store]);
+  }, [hydrate, isHydrating, session]);
 
-  return store;
+  return {
+    session,
+    isHydrating,
+    isLoading,
+    error,
+    hydrate,
+    signIn,
+    signOut,
+    setSession
+  };
 }

@@ -38,6 +38,7 @@ export function usePolling(
     }
 
     const timer = setInterval(() => {
+      // TODO: add an in-flight guard so slow polls cannot overlap and resolve out of order.
       void callbackRef.current();
     }, intervalMs);
 

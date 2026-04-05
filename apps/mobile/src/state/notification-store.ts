@@ -1,9 +1,7 @@
 import { create } from "zustand";
-import { createApiClient } from "../services/api-client";
+import { getMobileApiClient } from "../services/mobile-api";
 import { registerForPushNotificationsAsync } from "../services/push-service";
-import { MOBILE_API_BASE_URL } from "../utils/constants";
 import type { PushPreferences } from "../types/app";
-import { useAuthStore } from "./auth-store";
 
 type ToastState = {
   type: "info" | "success" | "error";
@@ -22,16 +20,6 @@ type NotificationStore = {
   showToast: (toast: NonNullable<ToastState>) => void;
   dismissToast: () => void;
 };
-
-function getClient() {
-  return createApiClient({
-    backendUrl: MOBILE_API_BASE_URL,
-    getAuthSession: async () => useAuthStore.getState().session,
-    onAuthSession: async (session) => {
-      useAuthStore.getState().setSession(session);
-    }
-  });
-}
 
 export const useNotificationStore = create<NotificationStore>((set) => ({
   isOnline: true,
@@ -52,7 +40,7 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
     try {
       const result = await registerForPushNotificationsAsync();
       if (result.pushToken) {
-        await getClient().registerPushToken(result.pushToken);
+        await getMobileApiClient().registerPushToken(result.pushToken);
       }
 
       set({

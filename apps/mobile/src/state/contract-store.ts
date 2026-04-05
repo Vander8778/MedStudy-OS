@@ -1,14 +1,12 @@
 import type { GetContractResponse } from "@medstudy/contracts";
 import { create } from "zustand";
-import { createApiClient } from "../services/api-client";
 import {
   CACHE_KEYS,
   getCacheFreshness,
   readCacheEntry,
   writeCacheEntry
 } from "../services/cache-service";
-import { MOBILE_API_BASE_URL } from "../utils/constants";
-import { useAuthStore } from "./auth-store";
+import { getMobileApiClient } from "../services/mobile-api";
 
 type ContractStore = {
   contract: GetContractResponse["contract"] | null;
@@ -19,16 +17,6 @@ type ContractStore = {
   invalidate: () => void;
 };
 
-function getClient() {
-  return createApiClient({
-    backendUrl: MOBILE_API_BASE_URL,
-    getAuthSession: async () => useAuthStore.getState().session,
-    onAuthSession: async (session) => {
-      useAuthStore.getState().setSession(session);
-    }
-  });
-}
-
 export const useContractStore = create<ContractStore>((set) => ({
   contract: null,
   isLoading: false,
@@ -37,7 +25,7 @@ export const useContractStore = create<ContractStore>((set) => ({
   async fetchContract(contractId) {
     set({ isLoading: true, error: undefined });
     try {
-      const response = await getClient().getContract(contractId);
+      const response = await getMobileApiClient().getContract(contractId);
       await writeCacheEntry(CACHE_KEYS.contract, response.contract);
       set({ contract: response.contract, isLoading: false, cacheState: "fresh" });
       return response.contract;

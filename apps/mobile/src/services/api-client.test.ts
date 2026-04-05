@@ -75,4 +75,42 @@ describe("mobile api client", () => {
     expect(authSession?.tokens.accessToken).toBe("fresh-access");
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
+
+  it("clears auth session when refresh fails", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/auth/refresh")) {
+        return new Response(
+          JSON.stringify({ error: { code: "unauthorized", message: "refresh expired" } }),
+          { status: 401 }
+        );
+      }
+
+      const authHeader = (init?.headers as Record<string, string> | undefined)?.Authorization;
+      if (authHeader === "Bearer expired-access") {
+        return new Response(
+          JSON.stringify({ error: { code: "unauthorized", message: "expired" } }),
+          { status: 401 }
+        );
+      }
+
+      return new Response(JSON.stringify({}), { status: 500 });
+    }) as unknown as typeof fetch;
+
+    const client = createApiClient({
+      backendUrl: "http://localhost:3000/api",
+      fetchImpl,
+      getAuthSession: async () => authSession,
+      onAuthSession: async (next) => {
+        authSession = next;
+      }
+    });
+
+    await expect(client.me()).rejects.toMatchObject({
+      message: "Authentication expired.",
+      status: 401
+    });
+    expect(authSession).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
 });

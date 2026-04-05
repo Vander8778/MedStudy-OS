@@ -4,7 +4,6 @@ import type {
   GetSessionResponse
 } from "@medstudy/contracts";
 import { create } from "zustand";
-import { createApiClient } from "../services/api-client";
 import {
   CACHE_KEYS,
   getCacheFreshness,
@@ -12,8 +11,12 @@ import {
   readCacheEntry,
   writeCacheEntry
 } from "../services/cache-service";
-import { MOBILE_API_BASE_URL } from "../utils/constants";
-import type { HomeSummary, SessionResultSummary } from "../types/app";
+import { getMobileApiClient } from "../services/mobile-api";
+import type {
+  ArtifactSubmitPayload,
+  HomeSummary,
+  SessionResultSummary
+} from "../types/app";
 import { useAuthStore } from "./auth-store";
 
 type SessionStore = {
@@ -37,23 +40,11 @@ type SessionStore = {
   ) => Promise<void>;
   submitArtifact: (payload: {
     sessionId: string;
-    artifact: Parameters<
-      ReturnType<typeof createApiClient>["submitArtifactPayload"]
-    >[0]["artifact"];
+    artifact: ArtifactSubmitPayload["artifact"];
     isOnline?: boolean;
   }) => Promise<void>;
   invalidate: () => void;
 };
-
-function getClient() {
-  return createApiClient({
-    backendUrl: MOBILE_API_BASE_URL,
-    getAuthSession: async () => useAuthStore.getState().session,
-    onAuthSession: async (session) => {
-      useAuthStore.getState().setSession(session);
-    }
-  });
-}
 
 function newQueueId() {
   return globalThis.crypto?.randomUUID?.() ?? `queue_${Date.now()}_${Math.random()}`;
@@ -71,7 +62,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
   cacheState: "missing",
   async fetchHome() {
     set({ isLoading: true, error: undefined });
-    const client = getClient();
+    const client = getMobileApiClient();
     try {
       const homeSummary = await client.getCurrentSessionSummary();
       await writeCacheEntry(CACHE_KEYS.currentSession, homeSummary);
@@ -105,7 +96,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
   },
   async fetchSession(sessionId) {
     set({ isLoading: true, error: undefined });
-    const client = getClient();
+    const client = getMobileApiClient();
     try {
       const [currentSession, scoring, events] = await Promise.all([
         client.getSession(sessionId),
@@ -144,7 +135,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
   },
   async fetchResults() {
     set({ isLoading: true, error: undefined });
-    const client = getClient();
+    const client = getMobileApiClient();
     try {
       const results = await client.getResults();
       await writeCacheEntry(CACHE_KEYS.results, results.results);
@@ -197,7 +188,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
     }
 
     try {
-      await getClient().completeCheckpoint(sessionId, checkpointId, {
+      await getMobileApiClient().completeCheckpoint(sessionId, checkpointId, {
         actor: {
           actorType: "user",
           userId: useAuthStore.getState().session?.user.id
@@ -206,6 +197,8 @@ export const useSessionStore = create<SessionStore>((set) => ({
       });
       await useSessionStore.getState().fetchSession(sessionId);
     } catch (error) {
+      // Roll back to the pre-submit snapshot. This is intentionally simple for MVP;
+      // concurrent checkpoint submissions could still race and restore an older snapshot.
       set({ currentSession: snapshot });
       throw error;
     }
@@ -223,7 +216,7 @@ export const useSessionStore = create<SessionStore>((set) => ({
       return;
     }
 
-    await getClient().submitArtifactPayload({ sessionId, artifact });
+    await getMobileApiClient().submitArtifactPayload({ sessionId, artifact });
     await useSessionStore.getState().fetchSession(sessionId);
   },
   invalidate() {

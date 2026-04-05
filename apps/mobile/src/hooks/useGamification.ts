@@ -2,13 +2,33 @@ import { useEffect } from "react";
 import { useGamificationStore } from "../state/gamification-store";
 
 export function useGamification() {
-  const store = useGamificationStore();
+  const progress = useGamificationStore((state) => state.progress);
+  const avatars = useGamificationStore((state) => state.avatars);
+  const equippedAvatarId = useGamificationStore((state) => state.equippedAvatarId);
+  const recentXpAwards = useGamificationStore((state) => state.recentXpAwards);
+  const isLoading = useGamificationStore((state) => state.isLoading);
+  const error = useGamificationStore((state) => state.error);
+  const cacheState = useGamificationStore((state) => state.cacheState);
+  const fetchProgress = useGamificationStore((state) => state.fetchProgress);
+  const equipAvatar = useGamificationStore((state) => state.equipAvatar);
+  const invalidate = useGamificationStore((state) => state.invalidate);
 
   useEffect(() => {
-    if (!store.progress && !store.isLoading) {
-      void store.fetchProgress();
+    if (!progress && !isLoading) {
+      void fetchProgress();
     }
-  }, [store]);
+  }, [fetchProgress, isLoading, progress]);
 
-  return store;
+  return {
+    progress,
+    avatars,
+    equippedAvatarId,
+    recentXpAwards,
+    isLoading,
+    error,
+    cacheState,
+    fetchProgress,
+    equipAvatar,
+    invalidate
+  };
 }

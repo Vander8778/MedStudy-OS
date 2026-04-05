@@ -1,7 +1,9 @@
 import { useEffect } from "react";
-import { createApiClient } from "../services/api-client";
 import { processQueuedActions } from "../services/cache-service";
-import { MOBILE_API_BASE_URL } from "../utils/constants";
+import {
+  getMobileApiClient,
+  parseQueuedArtifactActionPayload
+} from "../services/mobile-api";
 import { useNotificationStore } from "../state/notification-store";
 import { useAuthStore } from "../state/auth-store";
 import { useGamificationStore } from "../state/gamification-store";
@@ -16,30 +18,25 @@ async function getNetInfoModule() {
 }
 
 export function useOfflineCache() {
-  const notificationStore = useNotificationStore();
+  const isOnline = useNotificationStore((state) => state.isOnline);
+  const setOnline = useNotificationStore((state) => state.setOnline);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
 
     void getNetInfoModule().then((NetInfo) => {
       if (!NetInfo) {
-        notificationStore.setOnline(true);
+        setOnline(true);
         return;
       }
 
       unsubscribe = NetInfo.addEventListener((state) => {
         const nextOnline = Boolean(state.isConnected && state.isInternetReachable !== false);
         const wasOffline = !useNotificationStore.getState().isOnline && nextOnline;
-        useNotificationStore.getState().setOnline(nextOnline);
+        setOnline(nextOnline);
 
         if (wasOffline) {
-          const client = createApiClient({
-            backendUrl: MOBILE_API_BASE_URL,
-            getAuthSession: async () => useAuthStore.getState().session,
-            onAuthSession: async (session) => {
-              useAuthStore.getState().setSession(session);
-            }
-          });
+          const client = getMobileApiClient();
 
           void processQueuedActions({
             checkpoint_complete: async (action) => {
@@ -59,10 +56,8 @@ export function useOfflineCache() {
               );
             },
             artifact_submit: async (action) => {
-              await client.submitArtifactPayload({
-                sessionId: String(action.payload.sessionId),
-                artifact: action.payload.artifact as never
-              });
+              const parsed = parseQueuedArtifactActionPayload(action.payload);
+              await client.submitArtifactPayload(parsed);
             },
             avatar_equip: async (action) => {
               await client.equipAvatar(String(action.payload.avatarId));
@@ -78,9 +73,9 @@ export function useOfflineCache() {
     return () => {
       unsubscribe?.();
     };
-  }, [notificationStore]);
+  }, [setOnline]);
 
   return {
-    isOnline: notificationStore.isOnline
+    isOnline
   };
 }
