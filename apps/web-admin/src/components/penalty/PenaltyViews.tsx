@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import React from "react";
 import type { PenaltyView } from "@medstudy/contracts";
 import { ConfirmActionDialog, DataTable, EmptyState } from "../common/AdminPrimitives";
 
@@ -30,13 +31,13 @@ export function PenaltyQueueTable({ penalties }: { penalties: readonly PenaltyVi
 
 export function PenaltyActionPanel({
   penalties,
-  note,
+  getNote,
   onNoteChange,
   onAction
 }: {
   penalties: readonly PenaltyView[];
-  note: string;
-  onNoteChange: (value: string) => void;
+  getNote: (penaltyId: string, action: "revoke" | "confirm") => string;
+  onNoteChange: (penaltyId: string, action: "revoke" | "confirm", value: string) => void;
   onAction: (penaltyId: string, action: "revoke" | "confirm") => void;
 }) {
   const actionable = penalties.filter(
@@ -76,9 +77,9 @@ export function PenaltyActionPanel({
             <ConfirmActionDialog
               title="Confirm penalty"
               noteLabel="Review note"
-              note={note}
+              note={getNote(penalty.id, "confirm")}
               requiresNote={true}
-              onNoteChange={onNoteChange}
+              onNoteChange={(value) => onNoteChange(penalty.id, "confirm", value)}
               onConfirm={() => onAction(penalty.id, "confirm")}
               confirmLabel="Confirm penalty"
             />
@@ -86,9 +87,9 @@ export function PenaltyActionPanel({
           <ConfirmActionDialog
             title="Revoke penalty"
             noteLabel="Revocation note"
-            note={note}
+            note={getNote(penalty.id, "revoke")}
             requiresNote={true}
-            onNoteChange={onNoteChange}
+            onNoteChange={(value) => onNoteChange(penalty.id, "revoke", value)}
             onConfirm={() => onAction(penalty.id, "revoke")}
             confirmLabel="Revoke penalty"
           />

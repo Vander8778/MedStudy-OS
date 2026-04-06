@@ -5,6 +5,8 @@ import { createApiClient, type SessionDetailView } from "../lib/api-client";
 import { readStoredAdminSession } from "../lib/auth";
 import type { AdminActionId } from "../lib/permissions";
 
+export const MVP_OVERRIDE_OUTCOME = "review_pending" as const;
+
 export async function executeSessionMutationAndRefresh(options: {
   mutate: () => Promise<unknown>;
   refresh: () => Promise<unknown>;
@@ -70,7 +72,12 @@ export function useSessionDetail(sessionId: string) {
 
           await client.overrideSessionOutcome(
             sessionId,
-            { note, outcome: "review_pending" },
+            {
+              note,
+              // MVP boundary: the admin dashboard currently escalates overrides into
+              // backend review instead of offering a local outcome picker.
+              outcome: MVP_OVERRIDE_OUTCOME
+            },
             session
           );
         },

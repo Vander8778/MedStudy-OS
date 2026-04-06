@@ -21,7 +21,12 @@ import {
   type SessionState,
   type User
 } from "@medstudy/contracts";
-import { normalizeAdminRole, type AdminRole, type AdminSession } from "./auth";
+import {
+  expireStoredAdminSession,
+  normalizeAdminRole,
+  type AdminRole,
+  type AdminSession
+} from "./auth";
 import { getConservativeSessionActions, type AdminActionId } from "./permissions";
 
 export type StudentListItem = {
@@ -144,6 +149,8 @@ function buildAdminActionDefinitions(
   role: AdminRole,
   sessionState: SessionState
 ): readonly AdminActionDefinition[] {
+  // TODO: Replace this conservative fallback with backend-provided
+  // availableAdminActions once the admin session-detail endpoint exposes it.
   return getConservativeSessionActions(role, sessionState).map((action) => ({
     id: action,
     label:
@@ -211,6 +218,7 @@ export function createApiClient(baseUrl = DEFAULT_BASE_URL, fetchImpl: typeof fe
     });
 
     if (response.status === 401) {
+      expireStoredAdminSession();
       throw new ApiError(401, "Authentication expired.");
     }
 
@@ -312,6 +320,12 @@ export function createApiClient(baseUrl = DEFAULT_BASE_URL, fetchImpl: typeof fe
           "Unified admin audit endpoint is not available yet. Showing session events as the fallback timeline."
         );
       }
+      dependencyWarnings.push(
+        "Available admin actions are currently derived conservatively in the client until the backend exposes availableAdminActions."
+      );
+      dependencyWarnings.push(
+        "Override action is MVP-bound to route into review_pending until the backend exposes supported override target outcomes."
+      );
 
       return {
         aggregate,

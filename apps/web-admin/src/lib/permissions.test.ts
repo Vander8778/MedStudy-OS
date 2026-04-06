@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canUseAdminAction, getVisibleNavItems } from "./permissions";
+import {
+  canUseAdminAction,
+  getConservativeSessionActions,
+  getVisibleNavItems
+} from "./permissions";
 
 describe("web admin permissions", () => {
   it("shows fewer actions for support", () => {
@@ -13,5 +17,13 @@ describe("web admin permissions", () => {
     expect(getVisibleNavItems("support").some((item) => item.href === "/contracts")).toBe(
       false
     );
+  });
+
+  it("filters conservative actions by role and session state", () => {
+    expect(getConservativeSessionActions("support", "completed")).toEqual(["force_review"]);
+    expect(getConservativeSessionActions("admin", "completed")).toEqual(["force_review", "override"]);
+    expect(getConservativeSessionActions("admin", "failed")).toContain("excuse");
+    expect(getConservativeSessionActions("admin", "completed")).not.toContain("excuse");
+    expect(getConservativeSessionActions("admin", "penalized")).not.toContain("penalize");
   });
 });

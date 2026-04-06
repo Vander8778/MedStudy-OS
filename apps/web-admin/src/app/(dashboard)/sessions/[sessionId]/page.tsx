@@ -4,6 +4,7 @@ import { use, useState } from "react";
 import { PageHeader, StatusCallout } from "../../../../components/common/AdminPrimitives";
 import { AdminActionPanel, SessionDetailViewPanel } from "../../../../components/session/SessionViews";
 import { useSessionDetail } from "../../../../hooks/use-session-detail";
+import { clearActionNote } from "../../../../lib/admin-page-state";
 import type { AdminActionId } from "../../../../lib/permissions";
 
 export default function SessionDetailPage({
@@ -15,10 +16,10 @@ export default function SessionDetailPage({
   const { data, isLoading, error, runAdminAction } = useSessionDetail(
     resolvedParams.sessionId
   );
-  const [note, setNote] = useState("");
+  const [notesByAction, setNotesByAction] = useState<Partial<Record<AdminActionId, string>>>({});
   const [mutationError, setMutationError] = useState<string>();
 
-  async function handleAction(actionId: AdminActionId) {
+  async function handleAction(actionId: AdminActionId, note: string) {
     if (actionId === "revoke_penalty" || actionId === "confirm_penalty") {
       return;
     }
@@ -26,7 +27,7 @@ export default function SessionDetailPage({
     try {
       setMutationError(undefined);
       await runAdminAction(actionId, note);
-      setNote("");
+      setNotesByAction((current) => clearActionNote(current, actionId));
     } catch (nextError) {
       setMutationError(nextError instanceof Error ? nextError.message : "Action failed.");
     }
@@ -46,8 +47,13 @@ export default function SessionDetailPage({
           adminActionUi={
             <AdminActionPanel
               actions={data.availableAdminActions}
-              activeNote={note}
-              onNoteChange={setNote}
+              getNote={(actionId) => notesByAction[actionId] ?? ""}
+              onNoteChange={(actionId, value) =>
+                setNotesByAction((current) => ({
+                  ...current,
+                  [actionId]: value
+                }))
+              }
               onConfirm={handleAction}
             />
           }

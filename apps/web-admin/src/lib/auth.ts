@@ -24,6 +24,8 @@ export function normalizeAdminRole(email: string, role?: string): AdminRole | nu
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+  // Development-only fallback for local MVP workflows when backend admin roles are not
+  // fully provisioned yet. Remove before production so email prefixes never grant access.
   if (normalizedEmail.startsWith("admin@") || normalizedEmail.includes("+admin@")) {
     return "admin";
   }
@@ -88,4 +90,21 @@ export function writeStoredAdminSession(session: AdminSession | null) {
 
 export function clearStoredAdminSession() {
   writeStoredAdminSession(null);
+}
+
+export function expireStoredAdminSession(loginPath = "/login") {
+  clearStoredAdminSession();
+
+  if (!canUseWindow()) {
+    return;
+  }
+
+  const replace = window.location?.replace;
+  if (typeof replace !== "function") {
+    return;
+  }
+
+  if (window.location.pathname !== loginPath) {
+    replace(loginPath);
+  }
 }

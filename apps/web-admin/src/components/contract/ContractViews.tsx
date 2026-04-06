@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { ContractSummaryView, ContractTerms } from "@medstudy/contracts";
-import type { ContractDraftInput } from "../../lib/api-client";
+import { validateContractDraft, type ContractDraftInput } from "../../lib/api-client";
 import { DataTable, EmptyState, Panel, StatusCallout } from "../common/AdminPrimitives";
 
 export function ContractListTable({ contracts }: { contracts: readonly ContractSummaryView[] }) {
@@ -48,24 +48,7 @@ export function ContractDetailPanel({ contract }: { contract: ContractSummaryVie
 }
 
 export function validateContractForm(input: ContractDraftInput) {
-  const errors: string[] = [];
-  if (!input.userId.trim()) {
-    errors.push("User is required.");
-  }
-  if (!input.name.trim()) {
-    errors.push("Name is required.");
-  }
-  if (input.terms.minValidMinutes <= 0) {
-    errors.push("Minimum valid minutes must be positive.");
-  }
-  if (input.terms.vivaPassingScore < 0 || input.terms.vivaPassingScore > 100) {
-    errors.push("Viva passing score must be between 0 and 100.");
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors
-  };
+  return validateContractDraft(input);
 }
 
 export function ContractForm({

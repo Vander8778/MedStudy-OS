@@ -307,14 +307,14 @@ export function SessionDetailViewPanel({
 
 export function AdminActionPanel({
   actions,
-  activeNote,
+  getNote,
   onNoteChange,
   onConfirm
 }: {
   actions: SessionDetailView["availableAdminActions"];
-  activeNote: string;
-  onNoteChange: (value: string) => void;
-  onConfirm: (actionId: AdminActionId) => void;
+  getNote: (actionId: AdminActionId) => string;
+  onNoteChange: (actionId: AdminActionId, value: string) => void;
+  onConfirm: (actionId: AdminActionId, note: string) => void;
 }) {
   if (!actions.length) {
     return (
@@ -332,10 +332,10 @@ export function AdminActionPanel({
           key={action.id}
           title={action.label}
           noteLabel="Admin note"
-          note={activeNote}
+          note={getNote(action.id)}
           requiresNote={action.requiresNote}
-          onNoteChange={onNoteChange}
-          onConfirm={() => onConfirm(action.id)}
+          onNoteChange={(value) => onNoteChange(action.id, value)}
+          onConfirm={() => onConfirm(action.id, getNote(action.id))}
           confirmLabel={action.label}
         />
       ))}

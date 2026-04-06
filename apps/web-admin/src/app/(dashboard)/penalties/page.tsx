@@ -5,19 +5,27 @@ import { useState } from "react";
 import { PageHeader, Panel, StatusCallout } from "../../../components/common/AdminPrimitives";
 import { PenaltyActionPanel, PenaltyQueueTable } from "../../../components/penalty/PenaltyViews";
 import { usePenalties } from "../../../hooks/use-penalties";
+import { getPenaltyActionKey } from "../../../lib/admin-page-state";
 
 export default function PenaltiesPage() {
   const search = useSearchParams();
   const searchKey = search.toString();
   const { data, isLoading, error, mutatePenalty } = usePenalties(new URLSearchParams(searchKey));
-  const [note, setNote] = useState("");
+  const [notesByAction, setNotesByAction] = useState<Record<string, string>>({});
   const [mutationError, setMutationError] = useState<string>();
 
   async function handlePenaltyAction(penaltyId: string, action: "revoke" | "confirm") {
+    const actionKey = getPenaltyActionKey(penaltyId, action);
+    const note = notesByAction[actionKey] ?? "";
+
     try {
       setMutationError(undefined);
       await mutatePenalty(penaltyId, action, note);
-      setNote("");
+      setNotesByAction((current) => {
+        const next = { ...current };
+        delete next[actionKey];
+        return next;
+      });
     } catch (nextError) {
       setMutationError(nextError instanceof Error ? nextError.message : "Penalty action failed.");
     }
@@ -37,8 +45,15 @@ export default function PenaltiesPage() {
       <Panel title="Penalty actions">
         <PenaltyActionPanel
           penalties={data?.penalties ?? []}
-          note={note}
-          onNoteChange={setNote}
+          getNote={(penaltyId, action) =>
+            notesByAction[getPenaltyActionKey(penaltyId, action)] ?? ""
+          }
+          onNoteChange={(penaltyId, action, value) =>
+            setNotesByAction((current) => ({
+              ...current,
+              [getPenaltyActionKey(penaltyId, action)]: value
+            }))
+          }
           onAction={handlePenaltyAction}
         />
       </Panel>

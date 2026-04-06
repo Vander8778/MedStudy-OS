@@ -2,7 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ConfirmActionDialog } from "../common/AdminPrimitives";
-import { LiveSessionsTable, SessionDetailViewPanel } from "./SessionViews";
+import { AdminActionPanel, LiveSessionsTable, SessionDetailViewPanel } from "./SessionViews";
 
 const detail = {
   aggregate: {
@@ -130,5 +130,34 @@ describe("session explainability views", () => {
     expect(markup).toContain("Ada Lovelace");
     expect(markup).toContain("Cardiology Focus");
     expect(markup).toContain("18s ago");
+  });
+
+  it("renders independent note values for separate admin actions", () => {
+    const markup = renderToStaticMarkup(
+      <AdminActionPanel
+        actions={[
+          {
+            id: "excuse",
+            label: "Excuse Session",
+            requiresNote: true,
+            enabled: true
+          },
+          {
+            id: "penalize",
+            label: "Penalize Session",
+            requiresNote: true,
+            enabled: true
+          }
+        ]}
+        getNote={(actionId) =>
+          actionId === "excuse" ? "Excuse reason" : "Penalty reason"
+        }
+        onNoteChange={() => {}}
+        onConfirm={() => {}}
+      />
+    );
+
+    expect(markup).toContain("Excuse reason");
+    expect(markup).toContain("Penalty reason");
   });
 });
