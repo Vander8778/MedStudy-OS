@@ -20,6 +20,11 @@ const backendRoot = path.resolve(__dirname, "..", "..");
 const migrationsRoot = path.join(backendRoot, "prisma", "migrations");
 const tempRuntimeDir = path.join(os.tmpdir(), "medstudy-m14-prisma");
 
+// This E2E bootstrap intentionally uses the real Nest modules plus a real migrated test
+// database. The explicit provider overrides below keep those services bound to the test
+// Prisma instance; if SessionOrchestrator or related services gain new constructor
+// dependencies, this helper must be updated so the test module stays production-faithful.
+
 class E2EApiErrorFilter extends ApiErrorFilter implements ExceptionFilter {
   override catch(exception: unknown, host: ArgumentsHost) {
     if (exception instanceof Error && !(exception instanceof HttpException)) {
@@ -277,6 +282,7 @@ export async function seedActiveSession(
     contractId: string;
     state?: string;
     validMinutes?: number;
+    seedPassingViva?: boolean;
   }
 ) {
   const sessionId = input.sessionId ?? "session_fixture";
@@ -305,18 +311,20 @@ export async function seedActiveSession(
     }
   });
 
-  await prisma.vivaAttempt.create({
-    data: {
-      id: `${sessionId}_viva`,
-      sessionId,
-      status: "passed",
-      score: 88,
-      passingScore: 70,
-      completedAt: new Date("2036-04-07T09:54:00.000Z"),
-      createdAt: new Date("2036-04-07T09:50:00.000Z"),
-      updatedAt: new Date("2036-04-07T09:54:00.000Z")
-    }
-  });
+  if (input.seedPassingViva) {
+    await prisma.vivaAttempt.create({
+      data: {
+        id: `${sessionId}_viva`,
+        sessionId,
+        status: "passed",
+        score: 88,
+        passingScore: 70,
+        completedAt: new Date("2036-04-07T09:54:00.000Z"),
+        createdAt: new Date("2036-04-07T09:50:00.000Z"),
+        updatedAt: new Date("2036-04-07T09:54:00.000Z")
+      }
+    });
+  }
 
   return sessionId;
 }

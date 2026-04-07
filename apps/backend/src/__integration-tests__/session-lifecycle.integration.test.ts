@@ -34,6 +34,9 @@ describe("session lifecycle integration", () => {
     await harness.orchestrator.armSession(aggregate.session.id);
     await harness.orchestrator.confirmArmSession(aggregate.session.id);
     await harness.orchestrator.startSession(aggregate.session.id);
+    // The in-memory harness does not have a real persistence round-trip, so we advance the
+    // aggregate here to represent elapsed study time and a completed viva before review.
+    // The E2E suite covers the persisted HTTP -> database -> reload path separately.
     harness.state.aggregate.session = buildSession({
       ...harness.state.aggregate.session,
       state: "active_valid",

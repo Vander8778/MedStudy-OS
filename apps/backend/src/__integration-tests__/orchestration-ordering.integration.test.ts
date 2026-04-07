@@ -94,9 +94,7 @@ describe("orchestration ordering integration", () => {
     const result = await orchestrator.requestReview("session_fixture");
 
     expect(result.session.state).toBe("completed");
-    expect(order).toContain("M4");
-    expect(order).toContain("M3");
-    expect(order).toContain("M2_final");
+    expect(order).toEqual(["M4", "M3", "M2_final"]);
     expect(order.indexOf("M4")).toBeLessThan(order.indexOf("M3"));
     expect(order.indexOf("M3")).toBeLessThan(order.indexOf("M2_final"));
   });

@@ -146,6 +146,9 @@ describe("hard fail paths integration", () => {
       ).toContain(criticalCode);
       expect(review.scoring.components.validTime).toBeDefined();
       expect(review.scoring.components.process).toBeDefined();
+      expect(typeof review.scoring.sessionScore).toBe("number");
+      expect(typeof review.scoring.components.validTime.weighted).toBe("number");
+      expect(typeof review.scoring.components.process.weighted).toBe("number");
       expect(harness.state.scoring?.decisionTrace).toBeDefined();
     }
   );
