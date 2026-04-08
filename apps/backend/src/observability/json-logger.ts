@@ -2,6 +2,13 @@ import { ConsoleLogger, Injectable } from "@nestjs/common";
 import { getEnv } from "../config/env";
 import { RequestContextStore } from "./request-context";
 
+const LEVEL_ORDER = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3
+} as const;
+
 function normalizeMessage(message: unknown) {
   if (typeof message === "string") {
     return { message };
@@ -16,8 +23,17 @@ function normalizeMessage(message: unknown) {
 
 @Injectable()
 export class JsonLogger extends ConsoleLogger {
-  private write(level: "debug" | "info" | "warn" | "error", message: unknown, context?: string, trace?: string) {
+  private write(
+    level: "debug" | "info" | "warn" | "error",
+    message: unknown,
+    context?: string,
+    trace?: string
+  ) {
     const env = getEnv();
+    if (LEVEL_ORDER[level] < LEVEL_ORDER[env.logLevel]) {
+      return;
+    }
+
     const requestContext = RequestContextStore.get();
     const payload = normalizeMessage(message);
     const record = {

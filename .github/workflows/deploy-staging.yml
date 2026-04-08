@@ -41,8 +41,12 @@ jobs:
           STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
         run: |
           ssh -o StrictHostKeyChecking=no "$STAGING_SSH_USER@$STAGING_SSH_HOST" \
-            "docker login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}' && \
-             docker compose -f /srv/medstudy/docker-compose.yml pull && \
+            "export BACKEND_IMAGE='ghcr.io/${{ github.repository_owner }}/medstudy-backend:${{ github.sha }}' && \
+             export WEB_ADMIN_IMAGE='ghcr.io/${{ github.repository_owner }}/medstudy-web-admin:${{ github.sha }}' && \
+             docker login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}' && \
+             docker compose -f /srv/medstudy/docker-compose.yml pull backend-migrate backend web-admin && \
+             (docker compose -f /srv/medstudy/docker-compose.yml stop backend || true) && \
+             docker compose -f /srv/medstudy/docker-compose.yml run --rm backend-migrate && \
              docker compose -f /srv/medstudy/docker-compose.yml up -d"
       - name: Staging readiness smoke test
         if: ${{ vars.STAGING_BASE_URL != '' }}

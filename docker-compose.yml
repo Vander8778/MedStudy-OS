@@ -1,12 +1,36 @@
 services:
+  backend-migrate:
+    image: ${BACKEND_IMAGE:-medstudy/backend:local}
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    command:
+      - pnpm
+      - migrate
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: file:/app/prisma/dev.db
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001
+      S3_BUCKET: medstudy-local
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minioadmin
+      S3_SECRET_KEY: minioadmin
+      HEALTH_DEEP_TOKEN: local-health-token
+    restart: "no"
+    volumes:
+      - backend-data:/app/prisma
+
   backend:
+    image: ${BACKEND_IMAGE:-medstudy/backend:local}
     build:
       context: .
       dockerfile: apps/backend/Dockerfile
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: file:/workspace/apps/backend/prisma/dev.db
+      DATABASE_URL: file:/app/prisma/dev.db
       REDIS_URL: redis://redis:6379
       CORS_ORIGINS: http://localhost:3000,http://localhost:3001
       S3_BUCKET: medstudy-local
@@ -17,12 +41,17 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - backend-data:/workspace/apps/backend/prisma
+      - backend-data:/app/prisma
     depends_on:
-      - redis
-      - minio
+      backend-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
 
   web-admin:
+    image: ${WEB_ADMIN_IMAGE:-medstudy/web-admin:local}
     build:
       context: .
       dockerfile: apps/web-admin/Dockerfile

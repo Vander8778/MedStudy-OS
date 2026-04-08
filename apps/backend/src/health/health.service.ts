@@ -1,7 +1,6 @@
-import { existsSync, readdirSync } from "node:fs";
-import path from "node:path";
 import { Injectable, OnModuleDestroy } from "@nestjs/common";
 import Redis from "ioredis";
+import { getAppliedMigrationCount, getExpectedMigrationCount } from "../config/migration-status";
 import { PrismaService } from "../prisma/prisma.service";
 import { getEnv } from "../config/env";
 
@@ -29,33 +28,6 @@ export class HealthService implements OnModuleDestroy {
     });
 
     return this.redis;
-  }
-
-  private getMigrationsRoot() {
-    return path.resolve(__dirname, "..", "..", "prisma", "migrations");
-  }
-
-  private getExpectedMigrationCount() {
-    const migrationsRoot = this.getMigrationsRoot();
-    if (!existsSync(migrationsRoot)) {
-      return 0;
-    }
-
-    return readdirSync(migrationsRoot, { withFileTypes: true }).filter((entry) =>
-      entry.isDirectory()
-    ).length;
-  }
-
-  private async getAppliedMigrationCount() {
-    try {
-      const rows = await this.prisma.$queryRawUnsafe<Array<{ count: number | bigint }>>(
-        'SELECT COUNT(*) as count FROM "_prisma_migrations"'
-      );
-      const count = rows[0]?.count;
-      return typeof count === "bigint" ? Number(count) : Number(count ?? 0);
-    } catch {
-      return 0;
-    }
   }
 
   private async withTimeout<T>(operation: Promise<T>) {
@@ -125,7 +97,7 @@ export class HealthService implements OnModuleDestroy {
       return {
         ok: getEnv().nodeEnv !== "production",
         skipped: true,
-        reason: "REDIS_URL is not configured."
+        reason: "REDIS_URL is not configured. Non-compose local dev fails open here."
       };
     }
 
@@ -141,8 +113,8 @@ export class HealthService implements OnModuleDestroy {
   }
 
   private async checkMigrations() {
-    const expected = this.getExpectedMigrationCount();
-    const applied = await this.getAppliedMigrationCount();
+    const expected = getExpectedMigrationCount();
+    const applied = await getAppliedMigrationCount(this.prisma);
 
     return {
       ok: expected === applied,
@@ -165,7 +137,8 @@ export class HealthService implements OnModuleDestroy {
       const response = await this.withTimeout(fetch(env.s3Endpoint, { method: "GET" }));
       return {
         ok: response.ok || response.status < 500,
-        status: response.status
+        status: response.status,
+        note: "Reachability-only check. This does not validate object storage credentials."
       };
     } catch (error) {
       return {

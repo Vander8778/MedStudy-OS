@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "commonjs",
+  "files": [
+    "dist",
+    "prisma"
+  ],
   "scripts": {
     "dev": "nest start --watch",
     "start": "node dist/main.js",

@@ -23,6 +23,10 @@ M15 is implemented as an operational layer around the existing app modules. It a
 - `/ready` checks database reachability, Redis reachability when configured, and migration count parity.
 - `/health/deep` adds operator-facing dependency detail for object storage and AI provider configuration.
 
+Non-compose local backend runs still fail open on Redis if `REDIS_URL` is absent in
+non-production mode. That keeps direct local boot lightweight, but it also means
+`/ready` is not a guarantee that Redis-backed features are usable unless Redis is configured.
+
 ## Observability model
 
 - Request IDs are assigned in middleware and propagated through AsyncLocalStorage.
@@ -34,6 +38,7 @@ M15 is implemented as an operational layer around the existing app modules. It a
 
 `docker-compose.yml` starts:
 
+- backend-migrate
 - backend
 - web-admin
 - redis
@@ -53,8 +58,16 @@ Both deploy workflows assume:
 - remote Docker Compose hosts
 - SSH secrets configured in GitHub Actions
 
+The backend image is a pruned `pnpm deploy` artifact, not a copy of the full
+workspace. Prisma migrations are run as a one-shot deploy step before the
+backend service is brought back up, rather than being embedded in the backend
+container startup command. Remote deploys export explicit `BACKEND_IMAGE` and
+`WEB_ADMIN_IMAGE` tags so the host compose file pulls and runs the exact images
+that were built in CI, rather than relying on `build:` definitions alone.
+
 ## Operational gaps left explicit
 
 - Redis is wired for readiness/compose, but the current app still uses the in-process telemetry scheduler rather than BullMQ.
 - Deep health performs passive AI configuration checks rather than active provider pings.
+- Object storage health is a reachability check only; it does not verify bucket credentials.
 - The deploy workflows are concrete for GHCR + SSH, but can be swapped once a final hosting platform is chosen.

@@ -1,14 +1,17 @@
 services:
   backend:
+    working_dir: /workspace
     command: sh -c "pnpm install && pnpm --filter @medstudy/backend dev"
     volumes:
       - .:/workspace
       - backend-node-modules:/workspace/node_modules
       - backend-data:/workspace/apps/backend/prisma
     environment:
+      DATABASE_URL: file:/workspace/apps/backend/prisma/dev.db
       LOG_LEVEL: debug
 
   web-admin:
+    working_dir: /workspace
     command: sh -c "pnpm install && pnpm --filter @medstudy/web-admin dev"
     volumes:
       - .:/workspace

@@ -1,6 +1,6 @@
-import path from "node:path";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
+import { getAppliedMigrationCount } from "../config/migration-status";
 import { PrismaService } from "../prisma/prisma.service";
 import { getEnv } from "../config/env";
 import { TelemetryAnalysisScheduler } from "../modules/telemetry/telemetry-analysis.scheduler";
@@ -155,38 +155,13 @@ export function recordAiRequestMetric(input: {
 export class MetricsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly telemetryScheduler: TelemetryAnalysisScheduler
+    @Optional()
+    @Inject(TelemetryAnalysisScheduler)
+    private readonly telemetryScheduler?: TelemetryAnalysisScheduler
   ) {}
 
-  private resolveMigrationsRoot() {
-    return path.resolve(__dirname, "..", "..", "prisma", "migrations");
-  }
-
-  private getExpectedMigrationCountInternal() {
-    try {
-      const { readdirSync } = require("node:fs") as typeof import("node:fs");
-      return readdirSync(this.resolveMigrationsRoot(), { withFileTypes: true }).filter(
-        (entry) => entry.isDirectory()
-      ).length;
-    } catch {
-      return 0;
-    }
-  }
-
   async getAppliedMigrationVersion() {
-    try {
-      const rows = await this.prisma.$queryRawUnsafe<Array<{ count: number | bigint }>>(
-        'SELECT COUNT(*) as count FROM "_prisma_migrations"'
-      );
-      const count = rows[0]?.count;
-      return typeof count === "bigint" ? Number(count) : Number(count ?? 0);
-    } catch {
-      return 0;
-    }
-  }
-
-  getExpectedMigrationCount() {
-    return this.getExpectedMigrationCountInternal();
+    return getAppliedMigrationCount(this.prisma);
   }
 
   async refreshOperationalGauges() {
@@ -199,6 +174,8 @@ export class MetricsService {
 
     const env = getEnv();
     const cutoff = new Date(Date.now() - env.reviewPendingStuckMinutes * 60_000);
+    // Known coupling point: this metric reads the current Prisma session model directly
+    // because M15 does not introduce a separate operational repository abstraction.
     const stuckSessions = await this.prisma.session.count({
       where: {
         state: "review_pending",
@@ -209,7 +186,7 @@ export class MetricsService {
     });
 
     metrics.sessionsStuckReviewPending.set(stuckSessions);
-    metrics.telemetryQueueDepth.set(this.telemetryScheduler.getRegisteredSessionCount());
+    metrics.telemetryQueueDepth.set(this.telemetryScheduler?.getRegisteredSessionCount() ?? 0);
     metrics.migrationVersion.set(await this.getAppliedMigrationVersion());
   }
 

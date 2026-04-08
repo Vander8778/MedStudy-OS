@@ -22,7 +22,8 @@ COPY . .
 RUN pnpm --filter @medstudy/contracts build \
   && pnpm --filter @medstudy/domain build \
   && pnpm --filter @medstudy/ai-schemas build \
-  && pnpm --filter @medstudy/backend build
+  && pnpm --filter @medstudy/backend build \
+  && pnpm --filter @medstudy/backend --prod --legacy deploy /out/backend
 
 FROM node:22-bookworm-slim AS runner
 
@@ -32,10 +33,10 @@ ENV NODE_ENV="production"
 
 RUN corepack enable
 
-WORKDIR /workspace
+WORKDIR /app
 
-COPY --from=builder /workspace /workspace
+COPY --from=builder /out/backend /app
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "pnpm --filter @medstudy/backend migrate && pnpm --filter @medstudy/backend start"]
+CMD ["pnpm", "start"]
