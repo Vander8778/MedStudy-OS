@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import {
   evaluateContractRules,
   isOutcomeDecided,
@@ -28,6 +28,11 @@ import { AuditService } from "../audit/audit.service";
 import { ContractService } from "../contract/contract.service";
 import { NotificationService } from "../notification/notification.service";
 import { TimerService } from "../timer/timer.service";
+import {
+  recordSessionFinalizationErrorMetric,
+  recordSessionFinalizationMetric
+} from "../../observability/metrics.service";
+import { RequestContextStore } from "../../observability/request-context";
 import { SessionRepository, type SessionAggregate } from "./session.repository";
 
 export type CreateSessionCommand = {
@@ -67,6 +72,8 @@ type ReviewEvidenceSnapshot = {
 
 @Injectable()
 export class SessionOrchestrator {
+  private readonly logger = new Logger(SessionOrchestrator.name);
+
   constructor(
     private readonly sessionRepository: SessionRepository,
     private readonly auditService: AuditService,
@@ -473,6 +480,13 @@ export class SessionOrchestrator {
     };
 
     await this.sessionRepository.createSessionBundle(session, checkpoints, [plannedEvent]);
+    RequestContextStore.assign({ sessionId: session.id, userId: session.userId });
+    this.logger.log({
+      message: "session_created",
+      sessionId: session.id,
+      userId: session.userId,
+      contractId: session.contractId
+    });
     return this.sessionRepository.findSessionAggregateOrThrow(session.id);
   }
 
@@ -544,6 +558,19 @@ export class SessionOrchestrator {
           session: result.session
         });
       }
+
+      RequestContextStore.assign({
+        sessionId: result.session.id,
+        userId: result.session.userId
+      });
+      this.logger.log({
+        message: "session_transition_applied",
+        sessionId: result.session.id,
+        userId: result.session.userId,
+        fromState,
+        toState: result.toState,
+        eventType: machineEvent.type
+      });
 
       return result.session;
     });
@@ -657,16 +684,17 @@ export class SessionOrchestrator {
   }
 
   async requestReview(sessionId: string, options: { actor?: SessionActionActor } = {}) {
-    const result = await this.sessionRepository.withTransaction(async (db) => {
-      const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId, db);
+    try {
+      const result = await this.sessionRepository.withTransaction(async (db) => {
+        const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId, db);
 
-      if (aggregate.session.state === "review_pending") {
-        throw new SessionReviewInProgressException(sessionId);
-      }
+        if (aggregate.session.state === "review_pending") {
+          throw new SessionReviewInProgressException(sessionId);
+        }
 
-      if (isOutcomeDecided(aggregate.session.state)) {
-        throw new SessionAlreadyDecidedException(sessionId, aggregate.session.state);
-      }
+        if (isOutcomeDecided(aggregate.session.state)) {
+          throw new SessionAlreadyDecidedException(sessionId, aggregate.session.state);
+        }
 
       const reviewEvent = this.createMachineEvent("review_requested", options.actor);
       const reviewTransition = this.assertTransitionSucceeded(
@@ -716,15 +744,33 @@ export class SessionOrchestrator {
       await this.auditService.saveContractEvaluation(sessionId, contractEvaluation, db);
       await this.auditService.saveScoringResult(sessionId, scoringResult.result, db);
 
-      return {
-        session: outcomeTransition.session,
-        contractEvaluation,
-        scoring: scoringResult.result
-      };
-    });
+        return {
+          session: outcomeTransition.session,
+          contractEvaluation,
+          scoring: scoringResult.result
+        };
+      });
 
-    this.timerService.clearAllForSession(sessionId);
-    return result;
+      this.timerService.clearAllForSession(sessionId);
+      RequestContextStore.assign({
+        sessionId: result.session.id,
+        userId: result.session.userId
+      });
+      recordSessionFinalizationMetric(result.scoring.outcome);
+      this.logger.log({
+        message: "session_review_finalized",
+        sessionId: result.session.id,
+        userId: result.session.userId,
+        outcome: result.scoring.outcome,
+        sessionScore: result.scoring.sessionScore
+      });
+      return result;
+    } catch (error) {
+      recordSessionFinalizationErrorMetric(
+        error instanceof Error ? error.constructor.name : "unknown_error"
+      );
+      throw error;
+    }
   }
 
   async penalizeSession(sessionId: string, actor?: SessionActionActor) {
@@ -762,6 +808,16 @@ export class SessionOrchestrator {
     });
 
     this.timerService.clearAllForSession(sessionId);
+    RequestContextStore.assign({
+      sessionId: result.id,
+      userId: result.userId
+    });
+    recordSessionFinalizationMetric("penalized");
+    this.logger.log({
+      message: "session_penalized",
+      sessionId: result.id,
+      userId: result.userId
+    });
     return result;
   }
 
@@ -781,6 +837,12 @@ export class SessionOrchestrator {
     // warning and request review at nearly the same time; this must be hardened before
     // production so avoidance-driven actions can be serialized per session.
     await this.auditService.saveAntiAvoidanceResult(sessionId, assessment);
+    this.logger.log({
+      message: "avoidance_assessment_recorded",
+      sessionId,
+      overallSeverity: assessment.overallSeverity,
+      recommendedResponses: assessment.recommendedResponses
+    });
 
     if (assessment.recommendedResponses.includes("raise_warning")) {
       await this.dispatchSessionMutation(

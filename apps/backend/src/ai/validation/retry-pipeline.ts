@@ -1,5 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { createId } from "../../common/backend-utils";
+import { recordAiRequestMetric } from "../../observability/metrics.service";
+import { RequestContextStore } from "../../observability/request-context";
 import { AiRequestLogRepository } from "../audit/ai-request-log.repository";
 import { PromptRegistryService } from "../prompts/prompt-registry.service";
 import { PromptRenderer } from "../prompts/prompt-renderer";
@@ -15,6 +17,8 @@ import { OutputValidator } from "./output-validator";
 
 @Injectable()
 export class RetryPipeline {
+  private readonly logger = new Logger(RetryPipeline.name);
+
   constructor(
     private readonly providerRegistry: ProviderRegistry,
     private readonly promptRegistry: PromptRegistryService,
@@ -336,6 +340,25 @@ export class RetryPipeline {
             // returned so orchestration does not lose a usable result due to audit failure.
           }
 
+          RequestContextStore.assign({
+            sessionId: this.extractSessionId(parsedInput.data),
+            userId: this.extractUserId(parsedInput.data)
+          });
+          recordAiRequestMetric({
+            promptKey: request.promptKey,
+            status: "success",
+            durationSeconds: totalLatencyMs / 1000
+          });
+          this.logger.log({
+            message: "ai_request_succeeded",
+            requestId,
+            promptKey: request.promptKey,
+            sessionId: this.extractSessionId(parsedInput.data),
+            userId: this.extractUserId(parsedInput.data),
+            attemptCount,
+            totalLatencyMs
+          });
+
           return result;
         }
 
@@ -395,6 +418,25 @@ export class RetryPipeline {
       totalLatencyMs,
       sessionId: this.extractSessionId(parsedInput.data),
       userId: this.extractUserId(parsedInput.data)
+    });
+
+    RequestContextStore.assign({
+      sessionId: this.extractSessionId(parsedInput.data),
+      userId: this.extractUserId(parsedInput.data)
+    });
+    recordAiRequestMetric({
+      promptKey: request.promptKey,
+      status: "error",
+      durationSeconds: totalLatencyMs / 1000
+    });
+    this.logger.warn({
+      message: "ai_request_failed",
+      requestId,
+      promptKey: request.promptKey,
+      sessionId: this.extractSessionId(parsedInput.data),
+      userId: this.extractUserId(parsedInput.data),
+      attemptCount,
+      lastError
     });
 
     return failure;

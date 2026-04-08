@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { getEnv } from "../../config/env";
 import { AnthropicProvider } from "./anthropic.provider";
 import type { AiProvider } from "./ai-provider.interface";
 import type {
@@ -21,15 +22,16 @@ export class ProviderRegistry {
   }
 
   getDefaultConfig(_capabilityKey: AiCapabilityKey): AiProviderConfig {
+    const env = getEnv();
     return {
-      model: process.env.ANTHROPIC_MODEL ?? "claude-3-5-sonnet-latest",
-      maxTokens: Number(process.env.AI_MAX_TOKENS ?? 1500),
-      temperature: Number(process.env.AI_TEMPERATURE ?? 0.2)
+      model: env.anthropicModel,
+      maxTokens: env.aiMaxTokens,
+      temperature: env.aiTemperature
     };
   }
 
   getAuditLevel(): AiAuditLevel {
-    const raw = process.env.AI_AUDIT_LEVEL;
+    const raw = getEnv().aiAuditLevel;
 
     if (
       raw === "minimal" ||

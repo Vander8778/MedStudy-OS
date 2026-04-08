@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import {
   analyzeAvoidance,
   isActiveState,
@@ -9,6 +9,8 @@ import {
 import type { SessionAggregate } from "../session/session.repository";
 import { SessionOrchestrator } from "../session/session.orchestrator";
 import { SessionRepository } from "../session/session.repository";
+import { recordTelemetryProcessedMetric } from "../../observability/metrics.service";
+import { RequestContextStore } from "../../observability/request-context";
 import { buildTelemetrySummary } from "./telemetry-summary.builder";
 import {
   TelemetryRepository,
@@ -47,6 +49,7 @@ export type TelemetryAnalysisRunResult =
 
 @Injectable()
 export class TelemetryAnalysisWorker {
+  private readonly logger = new Logger(TelemetryAnalysisWorker.name);
   // Defense-in-depth: the scheduler already guards in-flight session work, but the worker
   // also protects itself so direct callers cannot accidentally double-enter analysis for the
   // same session in the future.
@@ -158,6 +161,7 @@ export class TelemetryAnalysisWorker {
     sessionId: string
   ): Promise<TelemetryAnalysisRunResult> {
     if (this.runningSessions.has(sessionId)) {
+      recordTelemetryProcessedMetric("skipped");
       return {
         status: "skipped",
         deregister: false,
@@ -171,6 +175,7 @@ export class TelemetryAnalysisWorker {
       const aggregate = await this.sessionRepository.findSessionAggregateOrThrow(sessionId);
 
       if (isTerminalState(aggregate.session.state)) {
+        recordTelemetryProcessedMetric("skipped");
         return {
           status: "skipped",
           deregister: true,
@@ -179,6 +184,7 @@ export class TelemetryAnalysisWorker {
       }
 
       if (!isActiveState(aggregate.session.state)) {
+        recordTelemetryProcessedMetric("skipped");
         return {
           status: "skipped",
           deregister: true,
@@ -242,12 +248,28 @@ export class TelemetryAnalysisWorker {
         lastAnalyzedAt: rawEvents[rawEvents.length - 1].serverReceivedAt
       });
 
+      recordTelemetryProcessedMetric("success");
+      RequestContextStore.assign({
+        sessionId: aggregate.session.id,
+        userId: aggregate.session.userId
+      });
+      this.logger.log({
+        message: "telemetry_analysis_processed",
+        sessionId: aggregate.session.id,
+        userId: aggregate.session.userId,
+        rawEventCount: rawEvents.length,
+        recommendedResponses: assessment.recommendedResponses
+      });
+
       return {
         status: "processed",
         deregister: false,
         summary,
         assessment
       };
+    } catch (error) {
+      recordTelemetryProcessedMetric("error");
+      throw error;
     } finally {
       this.runningSessions.delete(sessionId);
     }

@@ -40,6 +40,10 @@ export class TelemetryAnalysisScheduler
     return this.registeredSessions.has(sessionId);
   }
 
+  getRegisteredSessionCount() {
+    return this.registeredSessions.size;
+  }
+
   registerSession(sessionId: string, dueAt = Date.now()) {
     this.registeredSessions.set(sessionId, dueAt);
   }

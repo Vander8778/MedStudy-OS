@@ -8,10 +8,14 @@ import { NotificationModule } from "./modules/notification/notification.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AiModule } from "./ai/ai.module";
+import { HealthModule } from "./health/health.module";
+import { ObservabilityModule } from "./observability/observability.module";
 
 @Module({
   imports: [
     PrismaModule,
+    ObservabilityModule,
+    HealthModule,
     AiModule,
     AuditModule,
     NotificationModule,

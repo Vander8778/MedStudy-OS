@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { getEnv } from "../../config/env";
 import type { AiProvider } from "./ai-provider.interface";
 import {
   AiProviderError,
@@ -22,7 +23,7 @@ export class AnthropicProvider implements AiProvider {
       return this.client;
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = getEnv().anthropicApiKey;
 
     if (!apiKey) {
       throw new AiProviderError(

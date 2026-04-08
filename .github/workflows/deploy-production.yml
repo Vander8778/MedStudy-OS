@@ -1,0 +1,47 @@
+name: Deploy Production
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable corepack
+        run: corepack enable
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build and push backend image
+        run: |
+          docker build -f apps/backend/Dockerfile -t ghcr.io/${{ github.repository_owner }}/medstudy-backend:${{ github.sha }} .
+          docker push ghcr.io/${{ github.repository_owner }}/medstudy-backend:${{ github.sha }}
+      - name: Build and push web-admin image
+        run: |
+          docker build -f apps/web-admin/Dockerfile -t ghcr.io/${{ github.repository_owner }}/medstudy-web-admin:${{ github.sha }} .
+          docker push ghcr.io/${{ github.repository_owner }}/medstudy-web-admin:${{ github.sha }}
+      - name: Configure SSH
+        env:
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$PRODUCTION_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Deploy on production host
+        env:
+          PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          PRODUCTION_SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+        run: |
+          ssh -o StrictHostKeyChecking=no "$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST" \
+            "docker login ghcr.io -u '${{ github.actor }}' -p '${{ secrets.GITHUB_TOKEN }}' && \
+             docker compose -f /srv/medstudy/docker-compose.yml pull && \
+             docker compose -f /srv/medstudy/docker-compose.yml up -d"
+      - name: Production readiness smoke test
+        if: ${{ vars.PRODUCTION_BASE_URL != '' }}
+        run: curl --fail --show-error "${{ vars.PRODUCTION_BASE_URL }}/ready"

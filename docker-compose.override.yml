@@ -1,0 +1,21 @@
+services:
+  backend:
+    command: sh -c "pnpm install && pnpm --filter @medstudy/backend dev"
+    volumes:
+      - .:/workspace
+      - backend-node-modules:/workspace/node_modules
+      - backend-data:/workspace/apps/backend/prisma
+    environment:
+      LOG_LEVEL: debug
+
+  web-admin:
+    command: sh -c "pnpm install && pnpm --filter @medstudy/web-admin dev"
+    volumes:
+      - .:/workspace
+      - web-node-modules:/workspace/node_modules
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+
+volumes:
+  backend-node-modules:
+  web-node-modules:
