@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import {
   Controller,
   ForbiddenException,
@@ -11,6 +12,20 @@ import { HealthService } from "./health.service";
 type ResponseLike = {
   status: (code: number) => unknown;
 };
+
+function tokensMatch(expected: string | undefined, received: string | undefined) {
+  if (!expected || !received) {
+    return false;
+  }
+
+  const expectedBuffer = Buffer.from(expected);
+  const receivedBuffer = Buffer.from(received);
+  if (expectedBuffer.length !== receivedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuffer, receivedBuffer);
+}
 
 @Controller()
 export class HealthController {
@@ -39,11 +54,9 @@ export class HealthController {
     const token =
       healthToken ??
       (authorization?.startsWith("Bearer ") ? authorization.slice(7) : undefined);
+    const requiresToken = env.nodeEnv === "production" || Boolean(env.healthDeepToken);
 
-    if (
-      (env.nodeEnv === "production" || env.healthDeepToken) &&
-      token !== env.healthDeepToken
-    ) {
+    if (requiresToken && !tokensMatch(env.healthDeepToken, token)) {
       throw new ForbiddenException("Deep health access is restricted.");
     }
 

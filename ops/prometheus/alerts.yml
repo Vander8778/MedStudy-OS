@@ -1,0 +1,104 @@
+groups:
+  - name: medstudy-critical
+    rules:
+      - alert: MedStudyBackendDown
+        expr: up{job="medstudy-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          runbook: docs/runbooks/backend-down.md
+        annotations:
+          summary: Backend health target is down
+          description: The backend scrape target has been unavailable for more than 60 seconds.
+
+      - alert: MedStudyDatabaseUnreachable
+        expr: db_pool_active_connections{job="medstudy-backend"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          runbook: docs/runbooks/db-unreachable.md
+        annotations:
+          summary: Backend database connectivity failed
+          description: The backend cannot complete its database connectivity check.
+
+      - alert: MedStudyMigrationMismatch
+        expr: migration_version{job="medstudy-backend"} != migration_expected_version{job="medstudy-backend"}
+        for: 2m
+        labels:
+          severity: critical
+          runbook: docs/runbooks/migration-failure.md
+        annotations:
+          summary: Applied migrations do not match the checked-in migration set
+          description: The backend reports a migration version mismatch after deploy.
+
+      - alert: MedStudyWorkerStalled
+        expr: increase(telemetry_events_processed_total{job="medstudy-backend",status="success"}[5m]) == 0 and telemetry_queue_depth{job="medstudy-backend"} > 0
+        for: 5m
+        labels:
+          severity: critical
+          runbook: docs/runbooks/worker-stalled.md
+        annotations:
+          summary: Telemetry worker appears stalled
+          description: No telemetry events have been processed for 5 minutes while backlog remains queued.
+
+  - name: medstudy-warning
+    rules:
+      - alert: MedStudyStuckReviewPending
+        expr: sessions_stuck_review_pending{job="medstudy-backend"} > 0
+        for: 30m
+        labels:
+          severity: warning
+          runbook: docs/runbooks/stuck-sessions.md
+        annotations:
+          summary: Sessions are stuck in review_pending
+          description: One or more sessions have remained in review_pending beyond the configured threshold.
+
+      - alert: MedStudyTelemetryBacklog
+        expr: telemetry_queue_depth{job="medstudy-backend"} > 1000
+        for: 10m
+        labels:
+          severity: warning
+          runbook: docs/runbooks/telemetry-backlog.md
+        annotations:
+          summary: Telemetry backlog is growing
+          description: Telemetry queue depth has remained above 1000 for 10 minutes.
+
+      - alert: MedStudyAiProviderDegraded
+        expr: increase(ai_requests_total{job="medstudy-backend",status="error"}[5m]) / clamp_min(increase(ai_requests_total{job="medstudy-backend"}[5m]), 1) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          runbook: docs/runbooks/ai-provider-degraded.md
+        annotations:
+          summary: AI provider error rate is elevated
+          description: More than 20 percent of AI requests have failed over the last 5 minutes.
+
+      - alert: MedStudyFinalizationErrors
+        expr: increase(session_finalization_errors_total{job="medstudy-backend"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          runbook: docs/runbooks/finalization-errors.md
+        annotations:
+          summary: Session finalization errors detected
+          description: One or more session finalization errors occurred in the last 5 minutes.
+
+      - alert: MedStudyHighErrorRate
+        expr: increase(http_requests_total{job="medstudy-backend",status=~"5.."}[5m]) / clamp_min(increase(http_requests_total{job="medstudy-backend"}[5m]), 1) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          runbook: docs/runbooks/high-error-rate.md
+        annotations:
+          summary: Backend 5xx rate is elevated
+          description: More than 5 percent of HTTP responses have been 5xx over the last 5 minutes.
+
+      - alert: MedStudyAuthAnomalies
+        expr: increase(http_requests_total{job="medstudy-backend",status=~"401|403"}[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+          runbook: docs/runbooks/auth-anomalies.md
+        annotations:
+          summary: Authentication anomalies detected
+          description: 401 and 403 responses are elevated over the last 5 minutes.

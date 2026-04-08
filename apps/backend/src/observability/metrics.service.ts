@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from "@nestjs/common";
 import { Counter, Gauge, Histogram, Registry, collectDefaultMetrics } from "prom-client";
-import { getAppliedMigrationCount } from "../config/migration-status";
+import { getAppliedMigrationCount, getExpectedMigrationCount } from "../config/migration-status";
 import { PrismaService } from "../prisma/prisma.service";
 import { getEnv } from "../config/env";
 import { TelemetryAnalysisScheduler } from "../modules/telemetry/telemetry-analysis.scheduler";
@@ -18,6 +18,7 @@ type MetricsBundle = {
   aiRequestDurationSeconds: Histogram<"prompt_key">;
   dbPoolActiveConnections: Gauge;
   migrationVersion: Gauge;
+  migrationExpectedVersion: Gauge;
 };
 
 declare global {
@@ -92,6 +93,11 @@ function createMetricsBundle(): MetricsBundle {
     migrationVersion: new Gauge({
       name: "migration_version",
       help: "Current applied migration count.",
+      registers: [registry]
+    }),
+    migrationExpectedVersion: new Gauge({
+      name: "migration_expected_version",
+      help: "Expected migration count from the checked-in migration directory.",
       registers: [registry]
     })
   };
@@ -188,6 +194,7 @@ export class MetricsService {
     metrics.sessionsStuckReviewPending.set(stuckSessions);
     metrics.telemetryQueueDepth.set(this.telemetryScheduler?.getRegisteredSessionCount() ?? 0);
     metrics.migrationVersion.set(await this.getAppliedMigrationVersion());
+    metrics.migrationExpectedVersion.set(getExpectedMigrationCount());
   }
 
   async renderMetrics() {

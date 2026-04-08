@@ -16,6 +16,7 @@ M15 is implemented as an operational layer around the existing app modules. It a
 - Auth state: backend auth is still the current stub implementation, so `/health/deep` is protected by an ops token instead of product-role auth.
 - Object storage: local MinIO for development, S3-compatible configuration shape for non-local environments.
 - Database: the current backend remains SQLite-backed because the existing Prisma schema is SQLite today. M15 does not migrate runtime persistence to Postgres.
+- Production startup requires `HEALTH_DEEP_TOKEN`; deep health must not be exposed anonymously.
 
 ## Health model
 
@@ -65,9 +66,14 @@ container startup command. Remote deploys export explicit `BACKEND_IMAGE` and
 `WEB_ADMIN_IMAGE` tags so the host compose file pulls and runs the exact images
 that were built in CI, rather than relying on `build:` definitions alone.
 
+Local non-compose development can use the committed `.env.example` as the starting
+point for `.env.local`.
+
 ## Operational gaps left explicit
 
 - Redis is wired for readiness/compose, but the current app still uses the in-process telemetry scheduler rather than BullMQ.
 - Deep health performs passive AI configuration checks rather than active provider pings.
 - Object storage health is a reachability check only; it does not verify bucket credentials.
 - The deploy workflows are concrete for GHCR + SSH, but can be swapped once a final hosting platform is chosen.
+- Prometheus alert rules now live in `ops/prometheus/alerts.yml`; wiring them into a real Alertmanager or hosted equivalent is still environment-specific.
+- Backup and restore steps for the current SQLite MVP are documented in `docs/runbooks/backup-restore.md`.

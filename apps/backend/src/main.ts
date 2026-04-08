@@ -19,6 +19,7 @@ export async function bootstrap() {
   });
 
   app.useLogger(app.get(JsonLogger));
+  app.enableShutdownHooks();
   app.use(requestContextMiddleware);
   app.setGlobalPrefix("api", {
     exclude: [

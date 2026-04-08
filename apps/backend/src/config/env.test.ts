@@ -24,6 +24,16 @@ describe("env config", () => {
     ).toThrow(/DATABASE_URL is required in production/);
   });
 
+  it("requires a deep health token in production", () => {
+    expect(() =>
+      parseEnv({
+        NODE_ENV: "production",
+        DATABASE_URL: "file:./prod.db",
+        REDIS_URL: "redis://redis:6379"
+      })
+    ).toThrow(/HEALTH_DEEP_TOKEN is required in production/);
+  });
+
   it("parses csv cors origins and numeric overrides", () => {
     const env = parseEnv({
       DATABASE_URL: "file:./custom.db",

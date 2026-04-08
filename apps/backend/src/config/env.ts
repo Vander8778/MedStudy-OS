@@ -36,6 +36,13 @@ const envSchema = z
         message: "REDIS_URL is required in production."
       });
     }
+
+    if (!input.HEALTH_DEEP_TOKEN && input.NODE_ENV === "production") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "HEALTH_DEEP_TOKEN is required in production."
+      });
+    }
   });
 
 export type AppEnv = ReturnType<typeof parseEnv>;
